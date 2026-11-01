@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-#define L2M_VERSION "0.9.1"
+#define L2M_VERSION "0.9.2"
 
 /* ---- block device abstraction ---------------------------------------- */
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.2
+
+* **Speed test measures the disk, not the app:** the test no longer waits for the gauges after
+  every 8 MB (they are updated a few times a second), which could make fast disks look much
+  slower (81 MB/s shown for a disk that writes about 800 MB/s). With the write test, reading uses the freshly written 1 GB test file, so
+  the read value no longer depends on finding a big file; without it, the app looks for a big
+  file for up to 4 seconds and says when it only found small ones. The test waits while a
+  consistency check is running on the disk.
+
 ## 0.9.1 – first public beta
 
 * **Fixed:** writing into a long unwritten extent that was the last entry of a full extent leaf

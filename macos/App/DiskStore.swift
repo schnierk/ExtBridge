@@ -523,22 +523,30 @@ enum Shell {
 
 @MainActor
 final class SpeedTest: ObservableObject {
-    enum Phase: Equatable { case idle, searching, reading, writing, done, failed(String) }
+    enum Phase: Equatable { case idle, waiting, searching, reading, writing, done, failed(String) }
     @Published var phase: Phase = .idle
     @Published var readMBs: Double = 0
     @Published var writeMBs: Double = 0
     @Published var current: Double = 0
     @Published var fileName = ""
+    /// only small files to read: the read value says little
+    @Published var smallFile = false
     private var task: Task<Void, Never>?
 
-    func start(volume: URL, write: Bool) {
+    var running: Bool { [.waiting, .searching, .reading, .writing].contains(phase) }
+
+    /// `busy` tells whether a consistency scan is running on the disk; the test waits for it,
+    /// because the scan holds the file system and would make the disk look slow.
+    func start(volume: URL, write: Bool, busy: @escaping @MainActor @Sendable () -> Bool = { false }) {
         task?.cancel()
         readMBs = 0
         writeMBs = 0
         current = 0
+        fileName = ""
+        smallFile = false
         phase = .searching
         task = Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.runTest(volume: volume, write: write)
+            await self?.runTest(volume: volume, write: write, busy: busy)
         }
     }
 
@@ -547,71 +555,96 @@ final class SpeedTest: ObservableObject {
         phase = .idle
     }
 
-    nonisolated private func biggestFile(in root: URL) -> URL? {
+    nonisolated private func biggestFile(in root: URL) -> (URL, Int)? {
         let fm = FileManager.default
         guard let e = fm.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
                                     options: [.skipsPackageDescendants]) else { return nil }
         var best: (URL, Int)? = nil
-        var seen = 0
+        let start = Date()
         for case let u as URL in e {
-            seen += 1
-            if seen > 5000 { break }
+            // folders full of small files come first on many disks: look a while, not just at the first entries
+            if Task.isCancelled || Date().timeIntervalSince(start) > 4 { break }
             guard let v = try? u.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), v.isRegularFile == true,
                   let s = v.fileSize else { continue }
             if s > (best?.1 ?? 0) { best = (u, s) }
-            if s > 1 << 30 { break }
+            if s >= 1 << 30 { break }
         }
-        return best?.0
+        return best
     }
 
-    nonisolated private func runTest(volume: URL, write: Bool) async {
-        guard let file = biggestFile(in: volume) else {
-            await MainActor.run { self.phase = .failed("Keine Datei zum Lesen gefunden.") }
-            return
-        }
-        await MainActor.run {
-            self.fileName = file.lastPathComponent
-            self.phase = .reading
+    nonisolated private func runTest(volume: URL, write: Bool, busy: @escaping @MainActor @Sendable () -> Bool) async {
+        while !Task.isCancelled, await busy() {
+            await MainActor.run { self.phase = .waiting }
+            try? await Task.sleep(nanoseconds: 500_000_000)
         }
         let chunk = 8 << 20
         let buf = UnsafeMutableRawPointer.allocate(byteCount: chunk, alignment: 4096)
         defer { buf.deallocate() }
-        // read: bypass the cache so we measure the disk, not the RAM
-        let fd = open(file.path, O_RDONLY)
-        if fd >= 0 {
-            _ = fcntl(fd, F_NOCACHE, 1)
-            let start = Date()
-            var total = 0
-            while !Task.isCancelled && Date().timeIntervalSince(start) < 8 {
-                let n = read(fd, buf, chunk)
-                if n <= 0 { break }
-                total += n
-                let mbs = Double(total) / 1e6 / max(Date().timeIntervalSince(start), 0.001)
-                await MainActor.run { self.current = mbs; self.readMBs = mbs }
-            }
-            close(fd)
-        }
+        // page-aligned buffers + F_NOCACHE: the data goes straight to and from the disk, not the RAM.
+        // The gauges are updated a few times a second only; waiting for the UI after every
+        // chunk made the disk look several times slower than it is.
+        var testFile: URL? = nil
         if write && !Task.isCancelled {
-            await MainActor.run { self.phase = .writing; self.current = 0 }
+            await MainActor.run { self.phase = .writing; self.current = 0; self.fileName = L("eigene 1-GB-Testdatei") }
             let tmp = volume.appendingPathComponent(".extbridge-speedtest-\(getpid())")
             let wfd = open(tmp.path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)
             if wfd >= 0 {
                 _ = fcntl(wfd, F_NOCACHE, 1)
                 memset(buf, 0x5A, chunk)
                 let start = Date()
+                var shown = start
                 var total = 0
                 while !Task.isCancelled && total < (1 << 30) && Date().timeIntervalSince(start) < 8 {
                     let n = Darwin.write(wfd, buf, chunk)
                     if n <= 0 { break }
                     total += n
-                    let mbs = Double(total) / 1e6 / max(Date().timeIntervalSince(start), 0.001)
-                    await MainActor.run { self.current = mbs; self.writeMBs = mbs }
+                    if Date().timeIntervalSince(shown) > 0.2 {
+                        shown = Date()
+                        let mbs = Double(total) / 1e6 / max(shown.timeIntervalSince(start), 0.001)
+                        await MainActor.run { self.current = mbs; self.writeMBs = mbs }
+                    }
                 }
                 _ = fcntl(wfd, F_FULLFSYNC)
                 let all = Double(total) / 1e6 / max(Date().timeIntervalSince(start), 0.001)
                 close(wfd)
-                unlink(tmp.path)
                 await MainActor.run { self.writeMBs = all }
+                // read the test file back: it is big and certainly not in the cache
+                if total >= 256 << 20 { testFile = tmp } else { unlink(tmp.path) }
+            }
+        }
+        defer { if let t = testFile { unlink(t.path) } }
+        var file = testFile
+        if file == nil && !Task.isCancelled {
+            await MainActor.run { self.phase = .searching }
+            guard let best = biggestFile(in: volume) else {
+                await MainActor.run { self.phase = .failed("Keine Datei zum Lesen gefunden.") }
+                return
+            }
+            let (f, size) = best
+            file = f
+            await MainActor.run { self.fileName = f.lastPathComponent; self.smallFile = size < 256 << 20 }
+        }
+        if let file, !Task.isCancelled {
+            await MainActor.run { self.phase = .reading; self.current = 0 }
+            let fd = open(file.path, O_RDONLY)
+            if fd >= 0 {
+                _ = fcntl(fd, F_NOCACHE, 1)
+                let start = Date()
+                var shown = start
+                var total = 0
+                while !Task.isCancelled && Date().timeIntervalSince(start) < 8 {
+                    let n = read(fd, buf, chunk)
+                    if n <= 0 { break }
+                    total += n
+                    if Date().timeIntervalSince(shown) > 0.2 {
+                        shown = Date()
+                        let mbs = Double(total) / 1e6 / max(shown.timeIntervalSince(start), 0.001)
+                        await MainActor.run { self.current = mbs; self.readMBs = mbs }
+                    }
+                }
+                let all = Double(total) / 1e6 / max(Date().timeIntervalSince(start), 0.001)
+                close(fd)
+                await MainActor.run { self.readMBs = all }
             }
         }
         await MainActor.run { self.phase = Task.isCancelled ? .idle : .done }

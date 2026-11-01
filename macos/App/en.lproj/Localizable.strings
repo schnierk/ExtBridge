@@ -125,7 +125,6 @@
 "Laufwerk-Einstellungen gibt es, sobald das Laufwerk einmal eingehängt war." = "Drive settings are available once the drive has been mounted.";
 "Lesen" = "Read";
 "Lesen & Schreiben" = "Read & write";
-"Liest die größte gefundene Datei direkt von der Platte (am Zwischenspeicher vorbei)." = "Reads the largest file found directly from the disk (bypassing the cache).";
 "Linux hat auf diesem Laufwerk Fehler vermerkt. Zum Schutz deiner Daten nur lesend. Lass unter Linux „e2fsck“ laufen." = "Linux has recorded errors on this drive. Mounted read-only to protect your data. Run “e2fsck” on Linux.";
 "Linux-Benutzer als meinen Mac-Benutzer zeigen" = "Show the Linux user as my Mac user";
 "Linux-Benutzer-ID" = "Linux user ID";
@@ -220,3 +219,7 @@
 "Über USB von macOS nicht abfragbar" = "Not available over USB on macOS";
 "Übersicht" = "Overview";
 "„%@“ bitte neu anstecken" = "Please plug “%@” in again";
+"Misst direkt an der Platte, am Zwischenspeicher vorbei. Gelesen wird die Testdatei oder, ohne Schreibtest, die größte gefundene Datei." = "Measures the disk directly, bypassing the cache. Reading uses the test file or, without the write test, the largest file found.";
+"Nur kleine Dateien gefunden – der Lesewert ist ungenau." = "Only small files found – the read value is not accurate.";
+"Wartet, bis die Prüfung fertig ist …" = "Waiting for the check to finish …";
+"eigene 1-GB-Testdatei" = "own 1 GB test file";

@@ -414,20 +414,30 @@ private struct DiagnosticsTab: View {
 
     private func speedControls(_ mp: URL) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Liest die größte gefundene Datei direkt von der Platte (am Zwischenspeicher vorbei).")
+            Text("Misst direkt an der Platte, am Zwischenspeicher vorbei. Gelesen wird die Testdatei oder, ohne Schreibtest, die größte gefundene Datei.")
                 .foregroundStyle(.secondary)
             Toggle("Auch Schreiben testen (legt kurz 1 GB Testdatei an)", isOn: $allowWrite)
                 .disabled(status?.readOnly ?? true)
             if !speed.fileName.isEmpty {
                 Text(LF("Testdatei: %@", speed.fileName)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
+            if speed.smallFile && speed.phase == .done {
+                Text("Nur kleine Dateien gefunden – der Lesewert ist ungenau.").font(.caption).foregroundStyle(Theme.warn)
+            }
+            if speed.phase == .waiting {
+                Text("Wartet, bis die Prüfung fertig ist …").font(.caption).foregroundStyle(.secondary)
+            }
             if case let .failed(m) = speed.phase { Text(L(m)).foregroundStyle(Theme.bad) }
             HStack {
-                if speed.phase == .reading || speed.phase == .writing || speed.phase == .searching {
+                if speed.running {
                     ProgressView().controlSize(.small)
                     Button("Stopp") { speed.cancel() }
                 } else {
-                    Button { speed.start(volume: mp, write: allowWrite && !(status?.readOnly ?? true)) } label: {
+                    Button {
+                        let uuid = status?.uuid ?? ""
+                        speed.start(volume: mp, write: allowWrite && !(status?.readOnly ?? true),
+                                    busy: { [store] in store.verify[uuid]?.running == true })
+                    } label: {
                         Label("Test starten", systemImage: "bolt.fill")
                     }
                     .buttonStyle(.borderedProminent).tint(Theme.accent2)
