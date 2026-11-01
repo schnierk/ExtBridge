@@ -1,0 +1,45 @@
+{
+  "identifier" : "4C1D5E0B-6F2A-4C3B-9D5E-7A8B9C0D1E2F",
+  "nonRenewingSubscriptions" : [ ],
+  "products" : [
+    {
+      "displayPrice" : "1.99",
+      "familyShareable" : false,
+      "internalID" : "6754000001",
+      "localizations" : [
+        { "description" : "A small coffee for the developer", "displayName" : "Small coffee", "locale" : "en_US" },
+        { "description" : "Ein kleiner Kaffee für den Entwickler", "displayName" : "Kleiner Kaffee", "locale" : "de" }
+      ],
+      "productID" : "de.nexami.ExtBridge.tip.small",
+      "referenceName" : "Tip small",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "6754000002",
+      "localizations" : [
+        { "description" : "A big coffee for the developer", "displayName" : "Big coffee", "locale" : "en_US" },
+        { "description" : "Ein großer Kaffee für den Entwickler", "displayName" : "Großer Kaffee", "locale" : "de" }
+      ],
+      "productID" : "de.nexami.ExtBridge.tip.medium",
+      "referenceName" : "Tip medium",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "6754000003",
+      "localizations" : [
+        { "description" : "Coffee and cake for the developer", "displayName" : "Coffee and cake", "locale" : "en_US" },
+        { "description" : "Kaffee und Kuchen für den Entwickler", "displayName" : "Kaffee und Kuchen", "locale" : "de" }
+      ],
+      "productID" : "de.nexami.ExtBridge.tip.large",
+      "referenceName" : "Tip large",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : { "_failTransactionsEnabled" : false, "_locale" : "de", "_storefront" : "DEU" },
+  "subscriptionGroups" : [ ],
+  "version" : { "major" : 4, "minor" : 0 }
+}

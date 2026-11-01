@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>ExtBridge ext4</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>L2MAppGroup</key>
+	<string>$(TeamIdentifierPrefix)$(L2M_BUNDLE_PREFIX).extbridge</string>
+	<key>EXAppExtensionAttributes</key>
+	<dict>
+		<key>EXExtensionPointIdentifier</key>
+		<string>com.apple.fskit.fsmodule</string>
+		<key>FSShortName</key>
+		<string>extbridge</string>
+		<key>FSSupportsBlockResources</key>
+		<true/>
+		<key>FSSupportsKernelOffloadedIO</key>
+		<true/>
+		<key>FSSupportsPathURLs</key>
+		<false/>
+		<key>FSSupportsGenericURLResources</key>
+		<false/>
+		<key>FSSupportsServerURLs</key>
+		<false/>
+		<key>FSRequiresSecurityScopedPathURLResources</key>
+		<false/>
+		<key>FSPersonalities</key>
+		<dict>
+			<key>extbridge</key>
+			<dict>
+				<key>FSName</key>
+				<string>Linux ext4 (ExtBridge)</string>
+				<key>FSShortName</key>
+				<string>extbridge</string>
+				<key>FSIsCaseSensitive</key>
+				<true/>
+				<key>FSIsCasePreserving</key>
+				<true/>
+			</dict>
+		</dict>
+		<key>FSMediaTypes</key>
+		<dict>
+			<!-- GPT "Linux filesystem data" partitions -->
+			<key>0FC63DAF-8483-4772-8E79-3D69D8477DE4</key>
+			<dict>
+				<key>FSMediaProperties</key>
+				<dict>
+					<key>Content Hint</key>
+					<string>0FC63DAF-8483-4772-8E79-3D69D8477DE4</string>
+					<key>Leaf</key>
+					<true/>
+				</dict>
+			</dict>
+			<!-- MBR type 0x83 partitions (SD cards, older disks) -->
+			<key>Linux</key>
+			<dict>
+				<key>FSMediaProperties</key>
+				<dict>
+					<key>Content Hint</key>
+					<string>Linux</string>
+					<key>Leaf</key>
+					<true/>
+				</dict>
+			</dict>
+		</dict>
+		<key>FSCheckOptionSyntax</key>
+		<dict>
+			<key>shortOptions</key>
+			<string>fnqyp</string>
+		</dict>
+		<key>FSActivateOptionSyntax</key>
+		<dict>
+			<key>shortOptions</key>
+			<string>o:</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

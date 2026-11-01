@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>de</string>
+	</array>
+	<key>CFBundleDisplayName</key>
+	<string>ExtBridge</string>
+	<key>CFBundleExecutable</key>
+	<string>ExtBridge</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>ExtBridge</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<!-- Coffee links: card/Apple Pay via Stripe, PayPal via paypal.me; with both set
+	     the button asks which one (App Store builds use Apple's in-app purchase). -->
+	<key>L2MSupportURL</key>
+	<string>https://buy.stripe.com/aFa00l8Rm1Hl5wbauk1B601</string>
+	<key>L2MPayPalURL</key>
+	<string>https://paypal.me/popierk</string>
+	<key>L2MProjectURL</key>
+	<string>https://github.com/schnierk/ExtBridge</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Dirk Kollmann – MIT License</string>
+	<key>L2MAppGroup</key>
+	<string>$(TeamIdentifierPrefix)$(L2M_BUNDLE_PREFIX).extbridge</string>
+</dict>
+</plist>

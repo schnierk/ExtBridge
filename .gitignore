@@ -1,0 +1,6 @@
+build/
+*.img
+*.o
+.DS_Store
+*.provisionprofile
+macos/signing.env

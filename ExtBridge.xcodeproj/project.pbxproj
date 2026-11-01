@@ -1,0 +1,848 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+		47AB3220827544F58ED22AD8 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Shared.swift;
+			path = macos/Shared/Shared.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		F3EC43B526361556126CDF72 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Device.swift;
+			path = macos/Extension/Device.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		8C82A29119DEE633AC05FA97 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = FileSystem.swift;
+			path = macos/Extension/FileSystem.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		41A47F5BC11D794B1F96FD68 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Main.swift;
+			path = macos/Extension/Main.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		2F9396B31F8D663D8CE7FAA1 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Volume.swift;
+			path = macos/Extension/Volume.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		33C69D3C43DEE48BF1821F56 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Components.swift;
+			path = macos/App/Components.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		BFCBD92AFC03C1258EC475A4 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = DiskDetailView.swift;
+			path = macos/App/DiskDetailView.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		9DF84096862FCA2E21029B7F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = DiskStore.swift;
+			path = macos/App/DiskStore.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		9BF7D86935F1C0E2A7BD522A = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = LoginItem.swift;
+			path = macos/App/LoginItem.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		AD6FE7DEF290C2EADB536022 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Replug.swift;
+			path = macos/App/Replug.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		E9F63B80D4BC7DF9DE7F9147 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Snapshot.swift;
+			path = macos/App/Snapshot.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		845130F3E76696493523A9C2 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = TipJar.swift;
+			path = macos/App/TipJar.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		20A1732645F57AB3032AAD49 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Views.swift;
+			path = macos/App/Views.swift;
+			sourceTree = SOURCE_ROOT;
+		};
+		45E276F3C4A7A4E6123D18AC = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = alloc.c;
+			path = core/src/alloc.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		82A73C4C0BCDB1A0FE8BAFDE = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = cache.c;
+			path = core/src/cache.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		DA3D2CE87F5AB9F0DF5799B1 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = crc.c;
+			path = core/src/crc.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		FA2211476A86849EBB4B6FFA = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = devfd.c;
+			path = core/src/devfd.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		7DAE878FFA7DC59B09EA32B0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = dir.c;
+			path = core/src/dir.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		7B66157A90A0E21A278D25A2 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = extent.c;
+			path = core/src/extent.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		268D3151D04A0695471FF8B1 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = hash.c;
+			path = core/src/hash.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		FDDD063A15975F4E9E3CE3DE = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = inode.c;
+			path = core/src/inode.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		4E133AFB8DCA3482D588D1DD = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = journal.c;
+			path = core/src/journal.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		AE10F583EFA4438141DDFE56 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = ops.c;
+			path = core/src/ops.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		67241190B9C88CD27AF548C7 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = super.c;
+			path = core/src/super.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		34D7E053F6BE80D8FA976521 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = verify.c;
+			path = core/src/verify.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		423DE887A347BC1E7BC92D9B = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.c;
+			name = xattr.c;
+			path = core/src/xattr.c;
+			sourceTree = SOURCE_ROOT;
+		};
+		358CD099368231966CAA1A1F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			name = ext4_disk.h;
+			path = core/src/ext4_disk.h;
+			sourceTree = SOURCE_ROOT;
+		};
+		8C53C11879B210BF3A9D9277 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			name = internal.h;
+			path = core/src/internal.h;
+			sourceTree = SOURCE_ROOT;
+		};
+		5909515DEE70040B5A614E04 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			name = l2m.h;
+			path = core/include/l2m/l2m.h;
+			sourceTree = SOURCE_ROOT;
+		};
+		765A3314B55F7C1ADB5464B2 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			name = "App-Info.plist";
+			path = "macos/Xcode/App-Info.plist";
+			sourceTree = SOURCE_ROOT;
+		};
+		E989C4396E1B684BDE817D1C = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			name = "Extension-Info.plist";
+			path = "macos/Xcode/Extension-Info.plist";
+			sourceTree = SOURCE_ROOT;
+		};
+		41118773992DEE497F477BCA = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			name = App.entitlements;
+			path = macos/Xcode/App.entitlements;
+			sourceTree = SOURCE_ROOT;
+		};
+		3B93076800E714AE7FD72DD3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			name = Extension.entitlements;
+			path = macos/Xcode/Extension.entitlements;
+			sourceTree = SOURCE_ROOT;
+		};
+		06E4210BF1B1EF5486CF0A06 = {
+			isa = PBXFileReference;
+			lastKnownFileType = "sourcecode.module-map";
+			name = module.modulemap;
+			path = macos/L2MCore/module.modulemap;
+			sourceTree = SOURCE_ROOT;
+		};
+		B0FE814762CBC01FD643B800 = {
+			isa = PBXFileReference;
+			lastKnownFileType = image.icns;
+			name = AppIcon.icns;
+			path = macos/App/AppIcon.icns;
+			sourceTree = SOURCE_ROOT;
+		};
+		5C99C6B9F9A888A1BF4621F8 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = en;
+			path = macos/App/en.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		B6E5CE0E5370AF69B65C8E11 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.strings;
+			name = de;
+			path = macos/App/de.lproj/Localizable.strings;
+			sourceTree = SOURCE_ROOT;
+		};
+		74754E50F44A6320DC214CFB = {
+			isa = PBXVariantGroup;
+			children = (
+				5C99C6B9F9A888A1BF4621F8,
+				B6E5CE0E5370AF69B65C8E11,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		F91288DB192297DC903FE08C = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			path = ExtBridge.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		C846A9D32869F590D9009ABE = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.extensionkit-extension";
+			includeInIndex = 0;
+			path = ExtBridgeFS.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		647E7164A06FF71518326D10 = {
+			isa = PBXGroup;
+			children = (
+				45E276F3C4A7A4E6123D18AC,
+				82A73C4C0BCDB1A0FE8BAFDE,
+				DA3D2CE87F5AB9F0DF5799B1,
+				FA2211476A86849EBB4B6FFA,
+				7DAE878FFA7DC59B09EA32B0,
+				7B66157A90A0E21A278D25A2,
+				268D3151D04A0695471FF8B1,
+				FDDD063A15975F4E9E3CE3DE,
+				4E133AFB8DCA3482D588D1DD,
+				AE10F583EFA4438141DDFE56,
+				67241190B9C88CD27AF548C7,
+				34D7E053F6BE80D8FA976521,
+				423DE887A347BC1E7BC92D9B,
+				358CD099368231966CAA1A1F,
+				8C53C11879B210BF3A9D9277,
+				5909515DEE70040B5A614E04,
+			);
+			name = Core;
+			sourceTree = "<group>";
+		};
+		76B2665FCFBD19F1940584DA = {
+			isa = PBXGroup;
+			children = (
+				F3EC43B526361556126CDF72,
+				8C82A29119DEE633AC05FA97,
+				41A47F5BC11D794B1F96FD68,
+				2F9396B31F8D663D8CE7FAA1,
+				06E4210BF1B1EF5486CF0A06,
+			);
+			name = Extension;
+			sourceTree = "<group>";
+		};
+		267AEBE1BACFD8AB573455B5 = {
+			isa = PBXGroup;
+			children = (
+				33C69D3C43DEE48BF1821F56,
+				BFCBD92AFC03C1258EC475A4,
+				9DF84096862FCA2E21029B7F,
+				9BF7D86935F1C0E2A7BD522A,
+				AD6FE7DEF290C2EADB536022,
+				E9F63B80D4BC7DF9DE7F9147,
+				845130F3E76696493523A9C2,
+				20A1732645F57AB3032AAD49,
+				B0FE814762CBC01FD643B800,
+				74754E50F44A6320DC214CFB,
+			);
+			name = App;
+			sourceTree = "<group>";
+		};
+		9D10A42589C8F5479091BEBD = {
+			isa = PBXGroup;
+			children = (
+				47AB3220827544F58ED22AD8,
+			);
+			name = Shared;
+			sourceTree = "<group>";
+		};
+		CE58E7E453A795ADFD9CA8F0 = {
+			isa = PBXGroup;
+			children = (
+				765A3314B55F7C1ADB5464B2,
+				E989C4396E1B684BDE817D1C,
+				41118773992DEE497F477BCA,
+				3B93076800E714AE7FD72DD3,
+			);
+			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		2AC8BA37DAC32D5437812408 = {
+			isa = PBXGroup;
+			children = (
+				F91288DB192297DC903FE08C,
+				C846A9D32869F590D9009ABE,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4EAE695AD1F489F78EA3E1C6 = {
+			isa = PBXGroup;
+			children = (
+				267AEBE1BACFD8AB573455B5,
+				76B2665FCFBD19F1940584DA,
+				9D10A42589C8F5479091BEBD,
+				647E7164A06FF71518326D10,
+				CE58E7E453A795ADFD9CA8F0,
+				2AC8BA37DAC32D5437812408,
+			);
+			sourceTree = "<group>";
+		};
+		DDA87E591CF859FC3414F7C1 = {
+			isa = PBXBuildFile;
+			fileRef = 47AB3220827544F58ED22AD8;
+		};
+		B3C69057E0A53E9AA80B5458 = {
+			isa = PBXBuildFile;
+			fileRef = F3EC43B526361556126CDF72;
+		};
+		BD6B731BC5D574F753EFF7B7 = {
+			isa = PBXBuildFile;
+			fileRef = 8C82A29119DEE633AC05FA97;
+		};
+		B85204A7FCFEC094F1DF16A7 = {
+			isa = PBXBuildFile;
+			fileRef = 41A47F5BC11D794B1F96FD68;
+		};
+		E42A9C9F86EA6DF4395DCDA5 = {
+			isa = PBXBuildFile;
+			fileRef = 2F9396B31F8D663D8CE7FAA1;
+		};
+		558C7F0FC17BFE3B73EE099A = {
+			isa = PBXBuildFile;
+			fileRef = 45E276F3C4A7A4E6123D18AC;
+		};
+		613CC5DD1BC47B34443C08B4 = {
+			isa = PBXBuildFile;
+			fileRef = 82A73C4C0BCDB1A0FE8BAFDE;
+		};
+		AB614CAD701710E141319DC7 = {
+			isa = PBXBuildFile;
+			fileRef = DA3D2CE87F5AB9F0DF5799B1;
+		};
+		1B26DFB97834F85A2B00514C = {
+			isa = PBXBuildFile;
+			fileRef = FA2211476A86849EBB4B6FFA;
+		};
+		2EF8EA4677B65C739DFD5B13 = {
+			isa = PBXBuildFile;
+			fileRef = 7DAE878FFA7DC59B09EA32B0;
+		};
+		DE4B63106ED755477CC14A0B = {
+			isa = PBXBuildFile;
+			fileRef = 7B66157A90A0E21A278D25A2;
+		};
+		D1224821663991A8A7607F51 = {
+			isa = PBXBuildFile;
+			fileRef = 268D3151D04A0695471FF8B1;
+		};
+		33655766BDAC2DD60B95FD2A = {
+			isa = PBXBuildFile;
+			fileRef = FDDD063A15975F4E9E3CE3DE;
+		};
+		662A30736FC9C640FF3B6844 = {
+			isa = PBXBuildFile;
+			fileRef = 4E133AFB8DCA3482D588D1DD;
+		};
+		2C75C34EFCD66CDF48395114 = {
+			isa = PBXBuildFile;
+			fileRef = AE10F583EFA4438141DDFE56;
+		};
+		CA2D6A9F8E77B12DB501C654 = {
+			isa = PBXBuildFile;
+			fileRef = 67241190B9C88CD27AF548C7;
+		};
+		0227539666982780DF0F9F4E = {
+			isa = PBXBuildFile;
+			fileRef = 34D7E053F6BE80D8FA976521;
+		};
+		970EA18A740EA450BC2B878A = {
+			isa = PBXBuildFile;
+			fileRef = 423DE887A347BC1E7BC92D9B;
+		};
+		4685E8B8D0D77E7DE5A8F53B = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			runOnlyForDeploymentPostprocessing = 0;
+			files = (
+				DDA87E591CF859FC3414F7C1,
+				B3C69057E0A53E9AA80B5458,
+				BD6B731BC5D574F753EFF7B7,
+				B85204A7FCFEC094F1DF16A7,
+				E42A9C9F86EA6DF4395DCDA5,
+				558C7F0FC17BFE3B73EE099A,
+				613CC5DD1BC47B34443C08B4,
+				AB614CAD701710E141319DC7,
+				1B26DFB97834F85A2B00514C,
+				2EF8EA4677B65C739DFD5B13,
+				DE4B63106ED755477CC14A0B,
+				D1224821663991A8A7607F51,
+				33655766BDAC2DD60B95FD2A,
+				662A30736FC9C640FF3B6844,
+				2C75C34EFCD66CDF48395114,
+				CA2D6A9F8E77B12DB501C654,
+				0227539666982780DF0F9F4E,
+				970EA18A740EA450BC2B878A,
+			);
+		};
+		F4C478C5AC9A0A73E7EB2E80 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C83B3713D11F760C8FF5757B = {
+			isa = PBXBuildFile;
+			fileRef = 47AB3220827544F58ED22AD8;
+		};
+		7B7B14249AC5C9BFDA7F4BB3 = {
+			isa = PBXBuildFile;
+			fileRef = 33C69D3C43DEE48BF1821F56;
+		};
+		DFE901FE3B1B73FD1038335A = {
+			isa = PBXBuildFile;
+			fileRef = BFCBD92AFC03C1258EC475A4;
+		};
+		CB59146453C301801940575B = {
+			isa = PBXBuildFile;
+			fileRef = 9DF84096862FCA2E21029B7F;
+		};
+		07E82C2965A5C3C684D8745C = {
+			isa = PBXBuildFile;
+			fileRef = 9BF7D86935F1C0E2A7BD522A;
+		};
+		E9BB3B29ADCC55934D70BFB7 = {
+			isa = PBXBuildFile;
+			fileRef = AD6FE7DEF290C2EADB536022;
+		};
+		C48861C592085C3204FE9012 = {
+			isa = PBXBuildFile;
+			fileRef = E9F63B80D4BC7DF9DE7F9147;
+		};
+		BCDC85DCD5F6D4FD23EEE49C = {
+			isa = PBXBuildFile;
+			fileRef = 845130F3E76696493523A9C2;
+		};
+		7199A113CEFF20DEC4DDA525 = {
+			isa = PBXBuildFile;
+			fileRef = 20A1732645F57AB3032AAD49;
+		};
+		E619FD91F7807FBFE25AE60E = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			runOnlyForDeploymentPostprocessing = 0;
+			files = (
+				C83B3713D11F760C8FF5757B,
+				7B7B14249AC5C9BFDA7F4BB3,
+				DFE901FE3B1B73FD1038335A,
+				CB59146453C301801940575B,
+				07E82C2965A5C3C684D8745C,
+				E9BB3B29ADCC55934D70BFB7,
+				C48861C592085C3204FE9012,
+				BCDC85DCD5F6D4FD23EEE49C,
+				7199A113CEFF20DEC4DDA525,
+			);
+		};
+		AF0489BCA64AC3C0D96CBFB5 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7C3F5107A7BB8BDA99D5BDF4 = {
+			isa = PBXBuildFile;
+			fileRef = B0FE814762CBC01FD643B800;
+		};
+		8A20C7A21594A6EB82ABA4C1 = {
+			isa = PBXBuildFile;
+			fileRef = 74754E50F44A6320DC214CFB;
+		};
+		826FEF63C5D90282F7FB735C = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			runOnlyForDeploymentPostprocessing = 0;
+			files = (
+				7C3F5107A7BB8BDA99D5BDF4,
+				8A20C7A21594A6EB82ABA4C1,
+			);
+		};
+		EEEC74DBFEE5A1DA8DA5F212 = {
+			isa = PBXBuildFile;
+			fileRef = C846A9D32869F590D9009ABE;
+			settings = {
+				ATTRIBUTES = (
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
+		3769550BEC446D779F5C3557 = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(EXTENSIONS_FOLDER_PATH)";
+			dstSubfolderSpec = 16;
+			name = "Embed ExtensionKit Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+			files = (
+				EEEC74DBFEE5A1DA8DA5F212,
+			);
+		};
+		61A8FE553262CD7EB776D383 = {
+			isa = XCBuildConfiguration;
+			name = Debug;
+			buildSettings = {
+				PRODUCT_NAME = ExtBridgeFS;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(L2M_BUNDLE_PREFIX).ExtBridge.FSModule";
+				INFOPLIST_FILE = "macos/Xcode/Extension-Info.plist";
+				CODE_SIGN_ENTITLEMENTS = macos/Xcode/Extension.entitlements;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/macos/L2MCore";
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/core/include $(SRCROOT)/core/src";
+				SKIP_INSTALL = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				WARNING_CFLAGS = "-Wno-unused-parameter";
+			};
+		};
+		7C80754A03446383EF99BF62 = {
+			isa = XCBuildConfiguration;
+			name = Release;
+			buildSettings = {
+				PRODUCT_NAME = ExtBridgeFS;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(L2M_BUNDLE_PREFIX).ExtBridge.FSModule";
+				INFOPLIST_FILE = "macos/Xcode/Extension-Info.plist";
+				CODE_SIGN_ENTITLEMENTS = macos/Xcode/Extension.entitlements;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/macos/L2MCore";
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/core/include $(SRCROOT)/core/src";
+				SKIP_INSTALL = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				WARNING_CFLAGS = "-Wno-unused-parameter";
+			};
+		};
+		C89B25457434CC1A504FA593 = {
+			isa = XCBuildConfiguration;
+			name = AppStore;
+			buildSettings = {
+				PRODUCT_NAME = ExtBridgeFS;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(L2M_BUNDLE_PREFIX).ExtBridge.FSModule";
+				INFOPLIST_FILE = "macos/Xcode/Extension-Info.plist";
+				CODE_SIGN_ENTITLEMENTS = macos/Xcode/Extension.entitlements;
+				SWIFT_INCLUDE_PATHS = "$(SRCROOT)/macos/L2MCore";
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/core/include $(SRCROOT)/core/src";
+				SKIP_INSTALL = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				WARNING_CFLAGS = "-Wno-unused-parameter";
+			};
+		};
+		F196B339A726FAF5BDE22DD5 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				61A8FE553262CD7EB776D383,
+				7C80754A03446383EF99BF62,
+				C89B25457434CC1A504FA593,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		98E398162C206F89866DBAA5 = {
+			isa = XCBuildConfiguration;
+			name = Debug;
+			buildSettings = {
+				PRODUCT_NAME = ExtBridge;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(L2M_BUNDLE_PREFIX).ExtBridge";
+				INFOPLIST_FILE = "macos/Xcode/App-Info.plist";
+				CODE_SIGN_ENTITLEMENTS = macos/Xcode/App.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+			};
+		};
+		31F573C1C1732BCE6B7B4EEB = {
+			isa = XCBuildConfiguration;
+			name = Release;
+			buildSettings = {
+				PRODUCT_NAME = ExtBridge;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(L2M_BUNDLE_PREFIX).ExtBridge";
+				INFOPLIST_FILE = "macos/Xcode/App-Info.plist";
+				CODE_SIGN_ENTITLEMENTS = macos/Xcode/App.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+			};
+		};
+		A117915D398A2B3649CC4924 = {
+			isa = XCBuildConfiguration;
+			name = AppStore;
+			buildSettings = {
+				PRODUCT_NAME = ExtBridge;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(L2M_BUNDLE_PREFIX).ExtBridge";
+				INFOPLIST_FILE = "macos/Xcode/App-Info.plist";
+				CODE_SIGN_ENTITLEMENTS = "macos/Xcode/App-AppStore.entitlements";
+				GENERATE_INFOPLIST_FILE = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+			};
+		};
+		1ED00BBC0099E0D70106FB20 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				98E398162C206F89866DBAA5,
+				31F573C1C1732BCE6B7B4EEB,
+				A117915D398A2B3649CC4924,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		80DB6ACE13380ADC3D86D6C5 = {
+			isa = XCBuildConfiguration;
+			name = Debug;
+			buildSettings = {
+				SDKROOT = macosx;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				SWIFT_VERSION = 5.0;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MARKETING_VERSION = 0.9.1;
+				CURRENT_PROJECT_VERSION = 2;
+				L2M_BUNDLE_PREFIX = de.nexami;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ARCHS = "$(ARCHS_STANDARD)";
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				GCC_OPTIMIZATION_LEVEL = 0;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+			};
+		};
+		08723DE70035A45CE7E33CC1 = {
+			isa = XCBuildConfiguration;
+			name = Release;
+			buildSettings = {
+				SDKROOT = macosx;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				SWIFT_VERSION = 5.0;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MARKETING_VERSION = 0.9.1;
+				CURRENT_PROJECT_VERSION = 2;
+				L2M_BUNDLE_PREFIX = de.nexami;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ARCHS = "$(ARCHS_STANDARD)";
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				GCC_OPTIMIZATION_LEVEL = 2;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+		};
+		4F74D060AA97542A2C516690 = {
+			isa = XCBuildConfiguration;
+			name = AppStore;
+			buildSettings = {
+				SDKROOT = macosx;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				SWIFT_VERSION = 5.0;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MARKETING_VERSION = 0.9.1;
+				CURRENT_PROJECT_VERSION = 2;
+				L2M_BUNDLE_PREFIX = de.nexami;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ARCHS = "$(ARCHS_STANDARD)";
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				GCC_OPTIMIZATION_LEVEL = 2;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = APPSTORE;
+			};
+		};
+		B61A476A5531CC175278BDCF = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80DB6ACE13380ADC3D86D6C5,
+				08723DE70035A45CE7E33CC1,
+				4F74D060AA97542A2C516690,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5DC61D677659CB93EE502EBC = {
+			isa = PBXNativeTarget;
+			name = ExtBridgeFS;
+			productName = ExtBridgeFS;
+			productReference = C846A9D32869F590D9009ABE;
+			productType = "com.apple.product-type.extensionkit-extension";
+			buildConfigurationList = F196B339A726FAF5BDE22DD5;
+			buildPhases = (
+				4685E8B8D0D77E7DE5A8F53B,
+				F4C478C5AC9A0A73E7EB2E80,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+		};
+		431387EB7262E1CFC79B125E = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 46F86FAA6BBF9AC94A7E4595;
+			proxyType = 1;
+			remoteGlobalIDString = 5DC61D677659CB93EE502EBC;
+			remoteInfo = ExtBridgeFS;
+		};
+		2254342BECCEAFBD04538E0A = {
+			isa = PBXTargetDependency;
+			target = 5DC61D677659CB93EE502EBC;
+			targetProxy = 431387EB7262E1CFC79B125E;
+		};
+		ACC9652797AB670E77D9DAEA = {
+			isa = PBXNativeTarget;
+			name = ExtBridge;
+			productName = ExtBridge;
+			productReference = F91288DB192297DC903FE08C;
+			productType = "com.apple.product-type.application";
+			buildConfigurationList = 1ED00BBC0099E0D70106FB20;
+			buildPhases = (
+				E619FD91F7807FBFE25AE60E,
+				AF0489BCA64AC3C0D96CBFB5,
+				826FEF63C5D90282F7FB735C,
+				3769550BEC446D779F5C3557,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2254342BECCEAFBD04538E0A,
+			);
+		};
+		46F86FAA6BBF9AC94A7E4595 = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					ACC9652797AB670E77D9DAEA = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					5DC61D677659CB93EE502EBC = {
+						CreatedOnToolsVersion = 26.0;
+					};
+				};
+			};
+			buildConfigurationList = B61A476A5531CC175278BDCF;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				de,
+				en,
+				Base,
+			);
+			mainGroup = 4EAE695AD1F489F78EA3E1C6;
+			productRefGroup = 2AC8BA37DAC32D5437812408;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				ACC9652797AB670E77D9DAEA,
+				5DC61D677659CB93EE502EBC,
+			);
+		};
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595;
+}

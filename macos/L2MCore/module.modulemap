@@ -1,0 +1,4 @@
+module L2MCore {
+    header "../../core/include/l2m/l2m.h"
+    export *
+}
