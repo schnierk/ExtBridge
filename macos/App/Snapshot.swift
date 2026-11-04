@@ -45,6 +45,15 @@ extension DiskStore {
     }
 }
 
+extension DiskStore {
+    /// a scan that found files with zero holes (the diagnostics card's warning)
+    func loadDemoZeroHoles() {
+        let uuid = "0f1e2d3c-4b5a-4968-8776-655443322110"
+        verify[uuid]?.zeroHoleFiles = ["/photos/takeout-2026-1-009.zip", "/photos/takeout-2026-3-001.zip"]
+        verify[uuid]?.report += "note: 2 file(s) with zero holes\n"
+    }
+}
+
 @MainActor
 enum Snapshot {
     static var requested: Bool {
@@ -80,6 +89,7 @@ enum Snapshot {
             shots.append((name, AnyView(DemoWindow(tab: t).environmentObject(store))))
         }
         shots.append(("replug", AnyView(DemoWindow(tab: 0, disk: 1).environmentObject(store))))
+        shots.append(("zeroholes", AnyView(DemoWindow(tab: 1).environmentObject(store))))
         shots.append(("restart", AnyView(VStack(spacing: 18) { RestartCard(); UnsupportedCard() }.padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).background(Color(nsColor: .windowBackgroundColor)))))
         store.extensionState = .disabled
@@ -87,10 +97,18 @@ enum Snapshot {
         shots.append(("empty", AnyView(EmptyStateView())))
         shots.append(("about", AnyView(AboutView().frame(width: 540, height: 520).background(Color(nsColor: .windowBackgroundColor)))))
         shots.append(("coffee", AnyView(PaymentChoice {}.background(Color(nsColor: .windowBackgroundColor)))))
+        #if APPSTORE
+        // the tips as App Store Connect shows them (review screenshot of the in-app purchases)
+        let euro = { (v: Double) in v.formatted(.currency(code: "EUR")) }
+        shots.append(("tips", AnyView(TipJarView(demo: [(L("Kleiner Kaffee"), euro(1.99)), (L("Großer Kaffee"), euro(4.99)),
+                                                         (L("Kaffee und Kuchen"), euro(9.99))]) {}
+            .background(Color(nsColor: .windowBackgroundColor)))))
+        #endif
         store.extensionState = .enabled
         func next(_ k: Int) {
             guard k < shots.count else { exit(0) }
             if shots[k].0 == "setup" { store.extensionState = .disabled } else { store.extensionState = .enabled }
+            if shots[k].0 == "zeroholes" { store.loadDemoZeroHoles() }
             let host = NSHostingView(rootView: shots[k].1.frame(width: size.width, height: size.height))
             host.appearance = NSAppearance(named: CommandLine.arguments.contains("--light") ? .aqua : .darkAqua)
             host.frame = NSRect(origin: .zero, size: size)

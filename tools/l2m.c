@@ -200,6 +200,60 @@ static void tree(uint32_t dir, const char *prefix)
 	free(ns.ino);
 }
 
+/* ---- zero holes: unwritten extents inside files ------------------------ */
+
+struct zh {
+	const char *path;
+	uint64_t pieces;
+	uint32_t bs;
+};
+
+static int zh_cb(void *ctx, uint64_t lblk, uint64_t pblk, uint32_t len)
+{
+	struct zh *z = ctx;
+	if (z->pieces++ < 20)
+		printf("%s\tblocks %" PRIu64 "-%" PRIu64 " (%u blocks, bytes %" PRIu64 "-%" PRIu64 ") at %" PRIu64 "\n", z->path, lblk,
+		       lblk + len - 1, len, lblk * z->bs, (lblk + len) * z->bs - 1, pblk);
+	return 0;
+}
+
+static void zero_holes(uint32_t dir, const char *prefix, uint32_t bs, uint64_t *files, uint64_t *blocks)
+{
+	struct names ns = {0};
+	uint64_t cookie = 0;
+	int r = l2m_readdir(fs, dir, &cookie, collect_cb, &ns);
+	if (r)
+		die("readdir", r);
+	for (size_t i = 0; i < ns.n; i++) {
+		char path[4096];
+		snprintf(path, sizeof(path), "%s/%s", prefix, ns.v[i]);
+		l2m_stat st;
+		if (l2m_getattr(fs, ns.ino[i], &st) == 0) {
+			if ((st.mode & 0170000) == 0100000) {
+				struct zh z = {path, 0, bs};
+				int64_t n = l2m_zero_holes(fs, ns.ino[i], zh_cb, &z);
+				if (n < 0)
+					fprintf(stderr, "%s: %s\n", path, strerror((int)-n));
+				else if (n > 0) {
+					(*files)++;
+					*blocks += (uint64_t)n;
+				}
+			} else if ((st.mode & 0170000) == 0040000) {
+				zero_holes(ns.ino[i], path, bs, files, blocks);
+			}
+		}
+		free(ns.v[i]);
+	}
+	free(ns.v);
+	free(ns.ino);
+}
+
+static void print_path(void *ctx, uint32_t ino, const char *path)
+{
+	(void)ctx;
+	printf("%u\t%s\n", ino, path);
+}
+
 /* ---- copy in ------------------------------------------------------------ */
 
 static void copy_xattrs(const char *local, uint32_t ino)
@@ -292,6 +346,65 @@ static void copy_in(const char *local, uint32_t dir, const char *name)
 	}
 }
 
+/* ---- disk images with a partition table ---------------------------------
+ * The file system of a whole-disk image (GPT) starts at its first partition
+ * that holds ext2/3/4; reads and writes are shifted by that offset. */
+
+struct shifted {
+	l2m_dev inner;
+	uint64_t off;
+};
+
+static int sh_read(void *c, uint64_t off, void *buf, size_t len)
+{
+	struct shifted *s = c;
+	return s->inner.read(s->inner.ctx, off + s->off, buf, len);
+}
+
+static int sh_write(void *c, uint64_t off, const void *buf, size_t len)
+{
+	struct shifted *s = c;
+	return s->inner.write(s->inner.ctx, off + s->off, buf, len);
+}
+
+static int sh_flush(void *c)
+{
+	struct shifted *s = c;
+	return s->inner.flush(s->inner.ctx);
+}
+
+static int has_ext_magic(l2m_dev *d, uint64_t at)
+{
+	uint8_t m[2];
+	return d->read(d->ctx, at + 1024 + 56, m, 2) == 0 && m[0] == 0x53 && m[1] == 0xEF;
+}
+
+/* offset of the first ext2/3/4 partition of a GPT disk, 0 if none */
+static uint64_t gpt_ext_offset(l2m_dev *d)
+{
+	static uint8_t hdr[512], ent[512];
+	for (uint32_t lba = 512; lba <= 4096; lba *= 8) {
+		if (d->read(d->ctx, lba, hdr, sizeof(hdr)) || memcmp(hdr, "EFI PART", 8))
+			continue;
+		uint64_t first;
+		uint32_t n, size;
+		memcpy(&first, hdr + 72, 8);
+		memcpy(&n, hdr + 80, 4);
+		memcpy(&size, hdr + 84, 4);
+		if (size < 128 || size > sizeof(ent))
+			return 0;
+		for (uint32_t i = 0; i < n && i < 256; i++) {
+			uint64_t start;
+			if (d->read(d->ctx, first * lba + (uint64_t)i * size, ent, size))
+				return 0;
+			memcpy(&start, ent + 32, 8);
+			if (start && has_ext_magic(d, start * lba))
+				return start * lba;
+		}
+	}
+	return 0;
+}
+
 static void usage(void)
 {
 	fprintf(stderr,
@@ -304,8 +417,11 @@ static void usage(void)
 		"  put LOCAL PATH | copyin LOCALDIR PATH | mkdir PATH | rm PATH | rmdir PATH\n"
 		"  mv FROM TO | ln TARGET NEWPATH | symlink TARGET PATH | readlink PATH\n"
 		"  truncate PATH SIZE | write PATH OFFSET TEXT | chmod MODE PATH\n"
+		"  fallocate PATH SIZE (reserve space: the file grows, the new part reads as zeros)\n"
 		"  setxattr PATH NAME VALUE | getxattr PATH NAME | listxattr PATH | rmxattr PATH NAME\n"
-		"  bench PATH   (sequential read speed of a file)\n");
+		"  bench PATH   (sequential read speed of a file)\n"
+		"  extents PATH (all extents of a file) | zeroholes [PATH] (unwritten extents inside files)\n"
+		"  paths INODE... (where these inodes are in the directory tree)\n");
 	exit(2);
 }
 
@@ -377,6 +493,48 @@ static int run(const char *cmd, char **a, int na)
 			die("readdir", r);
 	} else if (!strcmp(cmd, "tree")) {
 		tree(resolve(na ? a[0] : "/"), "");
+	} else if (!strcmp(cmd, "paths") && na >= 1) {
+		uint32_t inos[64];
+		int n = 0;
+		for (int i = 0; i < na && n < 64; i++)
+			inos[n++] = (uint32_t)strtoul(a[i], NULL, 10);
+		r = l2m_find_paths(fs, inos, n, print_path, NULL);
+		if (r)
+			die("paths", r);
+	} else if (!strcmp(cmd, "zeroholes")) {
+		l2m_info in;
+		l2m_get_info(fs, &in);
+		uint64_t files = 0, blocks = 0;
+		zero_holes(resolve(na ? a[0] : "/"), na && strcmp(a[0], "/") ? a[0] : "", in.block_size, &files, &blocks);
+		printf("%" PRIu64 " file(s) with zero holes, %" PRIu64 " block(s) in total\n", files, blocks);
+		rc = files != 0;
+	} else if (!strcmp(cmd, "extents") && na == 1) {
+		uint32_t ino = resolve(a[0]);
+		l2m_stat st;
+		l2m_info in;
+		l2m_get_info(fs, &in);
+		r = l2m_getattr(fs, ino, &st);
+		if (r)
+			die(a[0], r);
+		uint64_t end = (st.size + in.block_size - 1) / in.block_size, n[3] = {0};
+		l2m_extent ex[64];
+		for (uint64_t lb = 0; lb < end;) {
+			int k = l2m_map(fs, ino, lb, end - lb, 0, ex, 64);
+			if (k < 0)
+				die("map", k);
+			if (k == 0)
+				break;
+			for (int i = 0; i < k; i++) {
+				static const char *names[] = {"hole", "data", "unwritten"};
+				printf("%10" PRIu64 " %8u  %s", ex[i].lblk, ex[i].len, names[ex[i].type % 3]);
+				if (ex[i].pblk)
+					printf(" at %" PRIu64, ex[i].pblk);
+				printf("\n");
+				n[ex[i].type % 3]++;
+				lb = ex[i].lblk + ex[i].len;
+			}
+		}
+		printf("%" PRIu64 " written, %" PRIu64 " unwritten, %" PRIu64 " hole(s)\n", n[1], n[2], n[0]);
 	} else if (!strcmp(cmd, "stat") && na == 1) {
 		l2m_stat st;
 		r = l2m_getattr(fs, resolve(a[0]), &st);
@@ -484,6 +642,16 @@ static int run(const char *cmd, char **a, int na)
 		if (r < 0)
 			die("readlink", r);
 		puts(t);
+	} else if (!strcmp(cmd, "fallocate") && na == 2) {
+		uint32_t ino = resolve(a[0]);
+		uint64_t size = strtoull(a[1], NULL, 0), got = 0;
+		r = l2m_preallocate(fs, ino, 0, size, &got);
+		l2m_stat st = {.size = size};
+		if (!r)
+			r = l2m_setattr(fs, ino, L2M_SET_SIZE, &st);
+		if (r)
+			die("fallocate", r);
+		printf("%" PRIu64 " bytes reserved\n", got);
 	} else if (!strcmp(cmd, "truncate") && na == 2) {
 		r = l2m_truncate(fs, resolve(a[0]), strtoull(a[1], NULL, 0));
 		if (r)
@@ -551,8 +719,19 @@ int main(int argc, char **argv)
 	int r = l2m_dev_open_fd(fd, rw, &dev);
 	if (r)
 		die("device", r);
+	l2m_dev used = dev;
+	struct shifted sh = {dev, 0};
+	if (!has_ext_magic(&dev, 0) && (sh.off = gpt_ext_offset(&dev))) {
+		used.ctx = &sh;
+		used.read = sh_read;
+		used.write = sh_write;
+		used.flush = sh_flush;
+		used.read_data = NULL;
+		used.write_data = NULL;
+		used.size = dev.size - sh.off;
+	}
 	char err[256];
-	r = l2m_mount(&dev, (rw ? 0 : L2M_MOUNT_RDONLY) | (sync ? L2M_MOUNT_SYNC : 0), &fs, err, sizeof(err));
+	r = l2m_mount(&used, (rw ? 0 : L2M_MOUNT_RDONLY) | (sync ? L2M_MOUNT_SYNC : 0), &fs, err, sizeof(err));
 	if (r) {
 		fprintf(stderr, "l2m: mount failed: %s (%s)\n", err, strerror(-r));
 		return 1;

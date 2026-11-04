@@ -85,6 +85,7 @@
 "Gesamt" = "Total";
 "Geschwindigkeitstest" = "Speed test";
 "Getrennt – jetzt das Kabel abziehen und wieder anstecken." = "Disconnected – now unplug the cable and plug it back in.";
+"Großer Kaffee" = "Big coffee";
 "Größe" = "Size";
 "Größe (Partition)" = "Size (partition)";
 "Größe: %@" = "Size: %@";
@@ -104,6 +105,7 @@
 "Journal" = "Journal";
 "Journal (Absturzschutz)" = "Journal (crash protection)";
 "Journal wurde wiederhergestellt" = "Journal was recovered";
+"Kaffee und Kuchen" = "Coffee and cake";
 "Karte, Apple Pay & mehr" = "Card, Apple Pay & more";
 "Kein ext2/ext3/ext4" = "No ext2/ext3/ext4";
 "Kein ext2/ext3/ext4 erkannt" = "No ext2/ext3/ext4 recognised";
@@ -118,6 +120,7 @@
 "Keine angeschlossen" = "None connected";
 "Keinen Papierkorb-Ordner (.Trashes) anlegen" = "Don't create a Trash folder (.Trashes)";
 "Keins" = "None";
+"Kleiner Kaffee" = "Small coffee";
 "Klicke auf „Systemeinstellungen öffnen“." = "Click “Open System Settings”.";
 "Konsistenz-Prüfung" = "Consistency check";
 "Kopieren" = "Copy";
@@ -223,3 +226,6 @@
 "Nur kleine Dateien gefunden – der Lesewert ist ungenau." = "Only small files found – the read value is not accurate.";
 "Wartet, bis die Prüfung fertig ist …" = "Waiting for the check to finish …";
 "eigene 1-GB-Testdatei" = "own 1 GB test file";
+"%d Datei(en) mit Nulllöchern – bitte neu kopieren oder herunterladen." = "%d file(s) with zero holes – please copy or download them again.";
+"Darin liest sich ein Stück als Nullen, obwohl dort Daten hingehörten. ExtBridge 0.9.2 konnte das bei sehr großen Dateien verursachen." = "Part of them reads as zeros where data belongs. ExtBridge 0.9.2 could cause this in very large files.";
+"Dateisystem in Ordnung." = "File system is fine.";

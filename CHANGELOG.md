@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.9.3
+
+* **Fixed: zero holes in big files.** When macOS writes file data itself (kernel-offloaded I/O),
+  it reports every finished write operation with one byte range. ExtBridge 0.9.2 marked exactly
+  that range as written. The range is only a summary, though: it can span gaps and, rarely, it
+  missed data the operation had written. That data then stayed marked "unwritten" and read back
+  as zeros, although the right bytes were on the disk. Seen 4 times in 44 browser downloads of
+  10 GB each, always a piece of 80–128 KB that ended exactly at a 64 MB boundary.
+  Now the core remembers which blocks it handed to which write operation and converts exactly
+  those when the operation reports back, wherever its reported range lies. Blocks the kernel
+  wrote without any report are converted when they are a minute old, at the latest when the file
+  is closed for good or the disk is ejected. Space reserved on Linux (fallocate) is no longer
+  marked written just because a reported range spans it, so old disk contents never show up in
+  a file. New test program `tests/koio.c` simulates the macOS protocol, including the imperfect
+  reports; with the logic of 0.9.2 it finds the zero holes.
+* **Fewer, longer extents:** data written piece by piece joins its neighbour extent when the two
+  are adjacent on the disk, as on Linux. A 10 GB download had about 1,400 extents with 0.9.2
+  (e2fsck: "extent tree could be narrower"), now it gets a few dozen to a few hundred, depending
+  on how many files are written at the same time.
+* **Consistency check finds zero holes:** it lists files with zero holes by path, so files damaged
+  by 0.9.2 can be copied again. `l2m IMAGE zeroholes` does the same from the command line,
+  `l2m IMAGE extents PATH` lists the extents of a file, and `l2m` now opens whole-disk images with
+  a GPT partition table directly.
+* Read mappings no longer pass the disk position of space that reads as zeros.
+* An I/O trace for debugging (off by default): while the file `commands/trace-io` exists in the
+  app's group container, every mapping, completion and size change goes to `trace/`.
+
 ## 0.9.2
 
 * **Speed test measures the disk, not the app:** the test no longer waits for the gauges after

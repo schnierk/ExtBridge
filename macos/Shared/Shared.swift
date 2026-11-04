@@ -193,4 +193,6 @@ struct L2MVerifyResult: Codable, Equatable {
     var report: String
     var started: Date
     var finished: Date?
+    /// files with zero holes (allocated blocks that read as zeros), by path
+    var zeroHoleFiles: [String]? = nil
 }

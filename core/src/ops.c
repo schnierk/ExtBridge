@@ -22,6 +22,8 @@ static int end_op(l2m_fs *fs, int r)
 	return r ? r : c;
 }
 
+static void koio_cut(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t end, bool only_op, uint64_t op);
+
 /* ---- attributes -------------------------------------------------------------- */
 
 static void fill_stat(l2m_fs *fs, struct l2m_inode *in, l2m_stat *st)
@@ -515,6 +517,7 @@ static int free_inode_fully(l2m_fs *fs, struct l2m_inode *in)
 	    (in->i.i_mode & L2M_S_IFMT) != L2M_S_IFBLK && (in->i.i_mode & L2M_S_IFMT) != L2M_S_IFIFO &&
 	    (in->i.i_mode & L2M_S_IFMT) != L2M_S_IFSOCK && !(in->i.i_flags & EXT4_INLINE_DATA_FL))
 		r = bmap_truncate(fs, in, 0);
+	koio_cut(fs, in->ino, 0, ~0ull, false, 0);
 	if (!r)
 		r = xattr_free_all(fs, in);
 	if (!r)
@@ -1130,6 +1133,7 @@ static int truncate_locked(l2m_fs *fs, struct l2m_inode *in, uint64_t size)
 			return r;
 	}
 	inode_set_size(in, size);
+	koio_cut(fs, in->ino, L2M_DIV_ROUND_UP(size, fs->bs), ~0ull, false, 0);
 	r = bmap_truncate(fs, in, L2M_DIV_ROUND_UP(size, fs->bs));
 	if (!r && big)
 		r = orphan_del(fs, in);
@@ -1191,11 +1195,111 @@ int l2m_preallocate(l2m_fs *fs, uint32_t ino, uint64_t off, uint64_t len, uint64
 	return r;
 }
 
-int l2m_map(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t count, unsigned flags, l2m_extent *out, int nmax)
+/* ---- kernel-offloaded I/O bookkeeping -----------------------------------------
+ *
+ * On macOS the kernel maps file ranges for writing (within numbered
+ * operations), writes the data straight to the device and then reports each
+ * operation done once, with one byte range. That range only summarises the
+ * operation: it can span gaps the operation never wrote, and it can miss
+ * data that was written - converting exactly the reported range left zero
+ * holes in big downloads (unwritten extents whose blocks held the right
+ * data). So the core remembers which unwritten blocks it handed out for
+ * writing, and to which operation:
+ *
+ *  - when an operation reports done, everything it was handed is converted,
+ *    wherever its reported range lies;
+ *  - unwritten blocks that were never handed out (fallocate on Linux) stay
+ *    unwritten even inside a reported range: old disk contents never show
+ *    up in a file;
+ *  - blocks handed out to operation 0 (the kernel writing through mappings
+ *    it kept), to an operation that failed, or to one that has not reported
+ *    for a minute are converted as soon as a report covers them; once
+ *    they are that old and inside the file they are converted anyway, and
+ *    all of them when the kernel releases the file;
+ *  - read mappings show handed-out blocks as data: the kernel wrote them or
+ *    still holds them dirty, so zeros would be wrong.
+ *
+ * Everything here runs with fs->lock held. */
+
+static int zero_uncovered_edges(l2m_fs *fs, struct l2m_inode *in, uint64_t off, uint64_t len);
+
+static bool koio_old(l2m_fs *fs, const struct koio_range *k, uint64_t now) { return now - k->since_ms >= fs->koio_lost_ms; }
+
+static int koio_add(l2m_fs *fs, uint32_t ino, uint64_t op, uint64_t lblk, uint64_t end)
+{
+	for (size_t i = 0; i < fs->nkoio; i++) {
+		struct koio_range *k = &fs->koio[i];
+		if (k->ino == ino && k->op == op && !k->failed && k->lblk <= end && lblk <= k->end) {
+			k->lblk = L2M_MIN(k->lblk, lblk);
+			k->end = L2M_MAX(k->end, end);
+			return 0;
+		}
+	}
+	if (fs->nkoio == fs->capkoio) {
+		size_t cap = fs->capkoio ? fs->capkoio * 2 : 64;
+		struct koio_range *v = realloc(fs->koio, cap * sizeof(*v));
+		if (!v)
+			return -ENOMEM;
+		fs->koio = v;
+		fs->capkoio = cap;
+	}
+	fs->koio[fs->nkoio++] = (struct koio_range){lblk, end, op, l2m_now_ms(), ino, false};
+	return 0;
+}
+
+/* Forgets blocks [lblk, end) of ino (of every operation, or only of op).
+ * Without memory for a split the entry stays whole, which only means a
+ * no-op conversion later. */
+static void koio_cut(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t end, bool only_op, uint64_t op)
+{
+	for (size_t i = 0; i < fs->nkoio;) {
+		struct koio_range *k = &fs->koio[i];
+		if (k->ino != ino || (only_op && k->op != op) || k->end <= lblk || k->lblk >= end) {
+			i++;
+		} else if (k->lblk < lblk && k->end > end) {
+			struct koio_range tail = *k;
+			tail.lblk = end;
+			if (fs->nkoio < fs->capkoio) {
+				k->end = lblk;
+				fs->koio[fs->nkoio++] = tail;
+			}
+			i++;
+		} else if (k->lblk < lblk) {
+			k->end = lblk;
+			i++;
+		} else if (k->end > end) {
+			k->lblk = end;
+			i++;
+		} else {
+			fs->koio[i] = fs->koio[--fs->nkoio];
+		}
+	}
+}
+
+/* Is lblk handed out (true; *to = end of that range) or not (*to = start
+ * of the next handed-out range of the file, or ~0)? */
+static bool koio_find(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t *to)
+{
+	*to = ~0ull;
+	for (size_t i = 0; i < fs->nkoio; i++) {
+		struct koio_range *k = &fs->koio[i];
+		if (k->ino != ino || k->failed)
+			continue;
+		if (k->lblk <= lblk && lblk < k->end) {
+			*to = k->end;
+			return true;
+		}
+		if (k->lblk > lblk && k->lblk < *to)
+			*to = k->lblk;
+	}
+	return false;
+}
+
+static int map_locked(l2m_fs *fs, uint32_t ino, uint64_t op, bool note, uint64_t lblk, uint64_t count, unsigned flags,
+		      l2m_extent *out, int nmax)
 {
 	struct l2m_inode in;
 	int n = 0;
-	LOCK(fs);
 	int r = read_live_inode(fs, ino, &in);
 	if (!r && (flags & L2M_MAP_ALLOCATE)) {
 		r = fs_check_writable(fs);
@@ -1215,7 +1319,11 @@ int l2m_map(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t count, unsigned fl
 		if (r)
 			break;
 		if (!m.pblk && (flags & L2M_MAP_ALLOCATE)) {
-			r = txn_need_room(fs, 16);
+			/* a commit must not see the extent tree ahead of the inode */
+			if (changed)
+				r = inode_write(fs, &in);
+			if (!r)
+				r = txn_need_room(fs, 16);
 			if (!r)
 				r = bmap_alloc(fs, &in, lblk, count, true, 0, &m);
 			if (r == -ENOSPC) {
@@ -1231,10 +1339,22 @@ int l2m_map(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t count, unsigned fl
 			changed = true;
 		}
 		uint32_t len = (uint32_t)L2M_MIN((uint64_t)m.len, count);
+		uint32_t type = !m.pblk ? L2M_EXT_HOLE : (m.unwritten ? L2M_EXT_UNWRITTEN : L2M_EXT_DATA);
+		if (type == L2M_EXT_UNWRITTEN && !(flags & L2M_MAP_ALLOCATE) && fs->nkoio) {
+			uint64_t to;
+			if (koio_find(fs, ino, lblk, &to))
+				type = L2M_EXT_DATA;
+			len = (uint32_t)L2M_MIN((uint64_t)len, to - lblk);
+		}
+		if (type == L2M_EXT_UNWRITTEN && note) {
+			r = koio_add(fs, ino, op, lblk, lblk + len);
+			if (r)
+				break;
+		}
 		out[n].lblk = lblk;
 		out[n].pblk = m.pblk;
 		out[n].len = len;
-		out[n].type = !m.pblk ? L2M_EXT_HOLE : (m.unwritten ? L2M_EXT_UNWRITTEN : L2M_EXT_DATA);
+		out[n].type = type;
 		n++;
 		lblk += len;
 		count -= len;
@@ -1246,8 +1366,228 @@ int l2m_map(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t count, unsigned fl
 	}
 	if (flags & L2M_MAP_ALLOCATE)
 		r = end_op(fs, r);
-	UNLOCK(fs);
 	return r ? r : n;
+}
+
+int l2m_map(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t count, unsigned flags, l2m_extent *out, int nmax)
+{
+	LOCK(fs);
+	int r = map_locked(fs, ino, 0, false, lblk, count, flags, out, nmax);
+	UNLOCK(fs);
+	return r;
+}
+
+int l2m_koio_map(l2m_fs *fs, uint32_t ino, uint64_t op, uint64_t lblk, uint64_t count, unsigned flags, l2m_extent *out, int nmax)
+{
+	LOCK(fs);
+	int r = map_locked(fs, ino, op, (flags & L2M_MAP_ALLOCATE) != 0, lblk, count, flags, out, nmax);
+	UNLOCK(fs);
+	return r;
+}
+
+int l2m_koio_unmap(l2m_fs *fs, uint32_t ino, uint64_t op, uint64_t lblk, uint64_t count)
+{
+	LOCK(fs);
+	koio_cut(fs, ino, lblk, lblk + count, true, op);
+	UNLOCK(fs);
+	return 0;
+}
+
+/* converts [a, b) of in and forgets it */
+static int koio_convert(l2m_fs *fs, struct l2m_inode *in, uint64_t a, uint64_t b)
+{
+	int r = ext_mark_written(fs, in, a, b - a);
+	if (!r)
+		koio_cut(fs, in->ino, a, b, false, 0);
+	return r;
+}
+
+struct koio_todo {
+	uint64_t a, b;
+};
+
+/* converts the collected ranges; returns the number of blocks or -errno */
+static int64_t koio_convert_all(l2m_fs *fs, struct l2m_inode *in, struct koio_todo *t, size_t n)
+{
+	int64_t blocks = 0;
+	for (size_t i = 0; i < n; i++) {
+		int r = koio_convert(fs, in, t[i].a, t[i].b);
+		if (r)
+			return r;
+		blocks += (int64_t)(t[i].b - t[i].a);
+	}
+	return blocks;
+}
+
+/* Operation op wrote what it was handed (as far as it lies inside the file:
+ * beyond the end it stays unwritten), plus - within its report [a, b) -
+ * what operation 0, failed or silent operations were handed. *missed:
+ * blocks of op that the report left out. */
+static int koio_settle(l2m_fs *fs, struct l2m_inode *in, uint64_t op, uint64_t a, uint64_t b, uint64_t now, uint64_t *missed)
+{
+	uint64_t eof = L2M_DIV_ROUND_UP(inode_size(in), fs->bs);
+	struct koio_todo *t = malloc((fs->nkoio + 1) * sizeof(*t));
+	if (!t)
+		return -ENOMEM;
+	size_t n = 0;
+	*missed = 0;
+	for (size_t i = 0; i < fs->nkoio; i++) {
+		struct koio_range *k = &fs->koio[i];
+		if (k->ino != in->ino)
+			continue;
+		if (op && k->op == op && !k->failed && k->lblk < eof) {
+			uint64_t end = L2M_MIN(k->end, eof);
+			t[n++] = (struct koio_todo){k->lblk, end};
+			uint64_t inside = k->lblk < b && a < end ? L2M_MIN(end, b) - L2M_MAX(k->lblk, a) : 0;
+			*missed += end - k->lblk - inside;
+		} else if ((k->op == 0 || k->failed || koio_old(fs, k, now)) && k->lblk < b && a < k->end) {
+			t[n++] = (struct koio_todo){L2M_MAX(k->lblk, a), L2M_MIN(k->end, b)};
+		}
+	}
+	int64_t r = koio_convert_all(fs, in, t, n);
+	free(t);
+	return r < 0 ? (int)r : 0;
+}
+
+/* Converts what the file was handed long ago (or, with all, everything)
+ * and still lies inside it: the kernel wrote it but never said so. */
+static int koio_sweep(l2m_fs *fs, struct l2m_inode *in, uint64_t now, bool all)
+{
+	uint64_t eof = L2M_DIV_ROUND_UP(inode_size(in), fs->bs);
+	struct koio_todo *t = malloc((fs->nkoio + 1) * sizeof(*t));
+	if (!t)
+		return -ENOMEM;
+	size_t n = 0;
+	uint64_t op = 0;
+	for (size_t i = 0; i < fs->nkoio; i++) {
+		struct koio_range *k = &fs->koio[i];
+		if (k->ino == in->ino && !k->failed && (all || koio_old(fs, k, now)) && k->lblk < eof) {
+			t[n++] = (struct koio_todo){k->lblk, L2M_MIN(k->end, eof)};
+			op = k->op;
+		}
+	}
+	int64_t r = koio_convert_all(fs, in, t, n);
+	free(t);
+	if (r > 0)
+		l2m_log(fs, L2M_LOG_WARN, "inode %u: %lld block(s) written by the kernel without a report (operation %llu and others) "
+			"marked as written", in->ino, (long long)r, (unsigned long long)op);
+	if (r >= 0 && all)
+		koio_cut(fs, in->ino, 0, ~0ull, false, 0);
+	return r < 0 ? (int)r : 0;
+}
+
+int l2m_koio_done(l2m_fs *fs, uint32_t ino, uint64_t op, uint64_t off, uint64_t len, int ok)
+{
+	struct l2m_inode in;
+	LOCK(fs);
+	int r = fs_check_writable(fs);
+	if (!r)
+		r = read_live_inode(fs, ino, &in);
+	if (!r)
+		r = writable_file(&in);
+	if (!r && !ok) {
+		/* nothing of it counts as written, but a later report may cover it */
+		for (size_t i = 0; i < fs->nkoio; i++)
+			if (fs->koio[i].ino == ino && fs->koio[i].op == op)
+				fs->koio[i].failed = true;
+		goto out;
+	}
+	if (!r)
+		r = txn_need_room(fs, 64);
+	uint64_t now = l2m_now_ms();
+	/* the size first: what the operation wrote beyond it stays unwritten */
+	if (!r && off + len > inode_size(&in))
+		inode_set_size(&in, off + len);
+	if (!r && len) {
+		uint64_t a = off / fs->bs, b = L2M_DIV_ROUND_UP(off + len, fs->bs), missed = 0;
+		/* the kernel writes whole pages; only blocks bigger than a page
+		 * (4 KiB at least) can be partly written */
+		if (fs->bs > 4096)
+			r = zero_uncovered_edges(fs, &in, off, len);
+		if (!r)
+			r = koio_settle(fs, &in, op, a, b, now, &missed);
+		if (!r && missed)
+			l2m_log(fs, L2M_LOG_WARN, "inode %u: operation %llu reported blocks %llu-%llu but also wrote %llu block(s) "
+				"outside; marked as written too", ino, (unsigned long long)op, (unsigned long long)a,
+				(unsigned long long)b - 1, (unsigned long long)missed);
+	}
+	if (!r) {
+		inode_touch(fs, &in, T_MTIME | T_CTIME);
+		r = koio_sweep(fs, &in, now, false);
+		if (!r)
+			r = inode_write(fs, &in);
+	}
+out:
+	r = end_op(fs, r);
+	UNLOCK(fs);
+	return r;
+}
+
+static int koio_release_locked(l2m_fs *fs, uint32_t ino)
+{
+	struct l2m_inode in;
+	int r = 0;
+	if (fs->rdonly || read_live_inode(fs, ino, &in) || !inode_is_reg(&in)) {
+		koio_cut(fs, ino, 0, ~0ull, false, 0);
+		return 0;
+	}
+	r = txn_need_room(fs, 64);
+	if (!r)
+		r = koio_sweep(fs, &in, l2m_now_ms(), true);
+	if (!r)
+		r = inode_write(fs, &in);
+	return end_op(fs, r);
+}
+
+int koio_release_all_locked(l2m_fs *fs)
+{
+	int r = 0;
+	while (fs->nkoio && !r) {
+		uint32_t first = fs->koio[0].ino;
+		r = koio_release_locked(fs, first);
+		if (!r)
+			koio_cut(fs, first, 0, ~0ull, false, 0); /* in case nothing was converted */
+	}
+	return r;
+}
+
+int l2m_koio_release(l2m_fs *fs, uint32_t ino)
+{
+	LOCK(fs);
+	int r = ino ? koio_release_locked(fs, ino) : koio_release_all_locked(fs);
+	UNLOCK(fs);
+	return r;
+}
+
+/* Edge blocks of [off, off+len) that are only partly covered and still
+ * unwritten: zero the uncovered bytes (they read as zero until now). */
+static int zero_uncovered_edges(l2m_fs *fs, struct l2m_inode *in, uint64_t off, uint64_t len)
+{
+	uint64_t first = off / fs->bs, last = (off + len - 1) / fs->bs;
+	uint64_t edges[2] = {first, last};
+	int r = 0;
+	for (int k = 0; k < (first == last ? 1 : 2) && !r; k++) {
+		uint64_t lb = edges[k];
+		uint32_t from = lb == first ? (uint32_t)(off % fs->bs) : 0;
+		uint32_t to = lb == last ? (uint32_t)((off + len - 1) % fs->bs) + 1 : fs->bs;
+		if (from == 0 && to == fs->bs)
+			continue;
+		struct l2m_map m;
+		r = bmap(fs, in, lb, &m);
+		if (r || !m.pblk || !m.unwritten)
+			continue;
+		uint8_t *b = malloc(fs->bs);
+		if (!b)
+			return -ENOMEM;
+		r = dev_read_data(fs, m.pblk, 1, b);
+		if (!r) {
+			memset(b, 0, from);
+			memset(b + to, 0, fs->bs - to);
+			r = dev_write_data(fs, m.pblk, 1, b);
+		}
+		free(b);
+	}
+	return r;
 }
 
 int l2m_write_done(l2m_fs *fs, uint32_t ino, uint64_t off, uint64_t len, uint64_t new_size)
@@ -1261,32 +1601,7 @@ int l2m_write_done(l2m_fs *fs, uint32_t ino, uint64_t off, uint64_t len, uint64_
 		r = writable_file(&in);
 	if (!r && len) {
 		uint64_t first = off / fs->bs, last = (off + len - 1) / fs->bs;
-		/* edge blocks that are only partly covered and still unwritten:
-		 * zero the uncovered bytes (they read as zero until now) */
-		uint64_t edges[2] = {first, last};
-		for (int k = 0; k < (first == last ? 1 : 2) && !r; k++) {
-			uint64_t lb = edges[k];
-			uint32_t from = lb == first ? (uint32_t)(off % fs->bs) : 0;
-			uint32_t to = lb == last ? (uint32_t)((off + len - 1) % fs->bs) + 1 : fs->bs;
-			if (from == 0 && to == fs->bs)
-				continue;
-			struct l2m_map m;
-			r = bmap(fs, &in, lb, &m);
-			if (r || !m.pblk || !m.unwritten)
-				continue;
-			uint8_t *b = malloc(fs->bs);
-			if (!b) {
-				r = -ENOMEM;
-				break;
-			}
-			r = dev_read_data(fs, m.pblk, 1, b);
-			if (!r) {
-				memset(b, 0, from);
-				memset(b + to, 0, fs->bs - to);
-				r = dev_write_data(fs, m.pblk, 1, b);
-			}
-			free(b);
-		}
+		r = zero_uncovered_edges(fs, &in, off, len);
 		if (!r)
 			r = ext_mark_written(fs, &in, first, last - first + 1);
 	}
@@ -1298,6 +1613,135 @@ int l2m_write_done(l2m_fs *fs, uint32_t ino, uint64_t off, uint64_t len, uint64_
 	}
 	r = end_op(fs, r);
 	UNLOCK(fs);
+	return r;
+}
+
+int64_t zero_holes_locked(l2m_fs *fs, struct l2m_inode *in, l2m_zero_fn fn, void *ctx)
+{
+	int64_t total = 0;
+	int r = 0;
+	uint32_t ino = in->ino;
+	if (inode_is_reg(in) && (in->i.i_flags & EXT4_EXTENTS_FL)) {
+		uint64_t end = L2M_DIV_ROUND_UP(inode_size(in), fs->bs);
+		for (uint64_t lb = 0; lb < end;) {
+			struct l2m_map m;
+			r = bmap(fs, in, lb, &m);
+			if (r)
+				break;
+			uint64_t len = L2M_MIN((uint64_t)m.len, end - lb);
+			uint64_t to;
+			bool busy = false;
+			if (m.pblk && m.unwritten && fs->nkoio) {
+				/* handed out to the kernel: being written right now */
+				busy = koio_find(fs, ino, lb, &to);
+				len = L2M_MIN(len, to - lb);
+			}
+			if (m.pblk && m.unwritten && !busy) {
+				total += (int64_t)len;
+				if (fn && fn(ctx, lb, m.pblk + (lb - m.lblk), (uint32_t)len))
+					break;
+			}
+			lb += len ? len : 1;
+		}
+	}
+	return r ? r : total;
+}
+
+int64_t l2m_zero_holes(l2m_fs *fs, uint32_t ino, l2m_zero_fn fn, void *ctx)
+{
+	struct l2m_inode in;
+	LOCK(fs);
+	int64_t r = read_live_inode(fs, ino, &in);
+	if (!r)
+		r = zero_holes_locked(fs, &in, fn, ctx);
+	UNLOCK(fs);
+	return r;
+}
+
+/* ---- paths of inodes ---------------------------------------------------------------- */
+
+struct pathwalk {
+	l2m_fs *fs;
+	const uint32_t *inos;
+	int n;
+	l2m_path_fn fn;
+	void *ctx;
+	char path[4096];
+	size_t len;
+	uint32_t *dirs; /* subdirectories of the directory being read */
+	size_t ndirs, capdirs;
+	char **names;
+};
+
+static int pathwalk_entry(void *ctx, const char *name, size_t len, uint32_t ino, unsigned dtype, uint64_t next)
+{
+	(void)next;
+	struct pathwalk *w = ctx;
+	if ((len == 1 && name[0] == '.') || (len == 2 && name[0] == '.' && name[1] == '.'))
+		return 0;
+	if (w->len + 1 + len >= sizeof(w->path))
+		return 0;
+	for (int i = 0; i < w->n; i++) {
+		if (w->inos[i] == ino) {
+			char p[4096];
+			snprintf(p, sizeof(p), "%.*s/%.*s", (int)w->len, w->path, (int)len, name);
+			w->fn(w->ctx, ino, p);
+		}
+	}
+	bool dir = dtype == L2M_DT_DIR;
+	if (dtype == 0) {
+		l2m_stat st;
+		dir = l2m_getattr(w->fs, ino, &st) == 0 && (st.mode & 0170000) == 0040000;
+	}
+	if (dir) {
+		if (w->ndirs == w->capdirs) {
+			size_t cap = w->capdirs ? w->capdirs * 2 : 32;
+			uint32_t *d = realloc(w->dirs, cap * sizeof(*d));
+			char **nm = realloc(w->names, cap * sizeof(*nm));
+			if (d)
+				w->dirs = d;
+			if (nm)
+				w->names = nm;
+			if (!d || !nm)
+				return -ENOMEM;
+			w->capdirs = cap;
+		}
+		w->names[w->ndirs] = strndup(name, len);
+		w->dirs[w->ndirs++] = ino;
+	}
+	return 0;
+}
+
+static int pathwalk_dir(struct pathwalk *w, uint32_t dir, int depth)
+{
+	if (depth > 64)
+		return 0;
+	size_t first = w->ndirs;
+	uint64_t cookie = 0;
+	int r = l2m_readdir(w->fs, dir, &cookie, pathwalk_entry, w);
+	size_t last = w->ndirs, len = w->len;
+	for (size_t i = first; i < last && !r; i++) {
+		size_t k = strlen(w->names[i]);
+		if (len + 1 + k < sizeof(w->path)) {
+			w->path[len] = '/';
+			memcpy(w->path + len + 1, w->names[i], k);
+			w->len = len + 1 + k;
+			r = pathwalk_dir(w, w->dirs[i], depth + 1);
+			w->len = len;
+		}
+	}
+	for (size_t i = first; i < last; i++)
+		free(w->names[i]);
+	w->ndirs = first;
+	return r;
+}
+
+int l2m_find_paths(l2m_fs *fs, const uint32_t *inos, int n, l2m_path_fn fn, void *ctx)
+{
+	struct pathwalk w = {.fs = fs, .inos = inos, .n = n, .fn = fn, .ctx = ctx};
+	int r = n > 0 ? pathwalk_dir(&w, L2M_ROOT_INO, 0) : 0;
+	free(w.dirs);
+	free(w.names);
 	return r;
 }
 

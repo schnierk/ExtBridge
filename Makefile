@@ -16,7 +16,7 @@ LDLIBS += -lpthread
 SRC := $(wildcard core/src/*.c)
 OBJ := $(patsubst core/src/%.c,build/obj/%.o,$(SRC))
 
-all: build/l2m build/stress build/bigfile build/libl2m.a
+all: build/l2m build/stress build/bigfile build/koio build/libl2m.a
 
 build/obj/%.o: core/src/%.c core/src/*.h core/include/l2m/l2m.h
 	@mkdir -p build/obj
@@ -32,6 +32,9 @@ build/stress: tests/stress.c build/libl2m.a
 	$(CC) $(CFLAGS) $< build/libl2m.a $(LDLIBS) -o $@
 
 build/bigfile: tests/bigfile.c build/libl2m.a
+	$(CC) $(CFLAGS) $< build/libl2m.a $(LDLIBS) -o $@
+
+build/koio: tests/koio.c build/libl2m.a
 	$(CC) $(CFLAGS) $< build/libl2m.a $(LDLIBS) -o $@
 
 asan:

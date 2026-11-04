@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-#define L2M_VERSION "0.9.2"
+#define L2M_VERSION "0.9.3"
 
 /* ---- block device abstraction ---------------------------------------- */
 
@@ -120,6 +120,19 @@ int l2m_set_label(l2m_fs *fs, const char *label);
  * number of problems found or -errno. */
 typedef int (*l2m_progress_fn)(void *ctx, uint64_t done, uint64_t total);
 int l2m_verify(l2m_fs *fs, l2m_progress_fn progress, void *ctx, char *report, size_t reportlen);
+/* The same, with numbers the report only describes. Zero holes (see
+ * l2m_zero_holes) are not counted as problems: they are legal, but in a
+ * finished file they mean data that reads as zeros. */
+typedef struct l2m_verify_stats {
+	uint64_t zero_hole_files;
+	uint64_t zero_hole_blocks;
+	uint32_t zero_hole_inos[32]; /* the first ones */
+} l2m_verify_stats;
+int l2m_verify_ex(l2m_fs *fs, l2m_progress_fn progress, void *ctx, char *report, size_t reportlen, l2m_verify_stats *stats);
+/* Walks the directory tree and calls fn with the path of each of the n
+ * inodes it finds (hard links: every path). */
+typedef void (*l2m_path_fn)(void *ctx, uint32_t ino, const char *path);
+int l2m_find_paths(l2m_fs *fs, const uint32_t *inos, int n, l2m_path_fn fn, void *ctx);
 
 /* Probe a device without mounting: 1 = ext2/3/4 found, 0 = no, <0 error.
  * Fills label/uuid if not NULL (17 / 37 bytes). */
@@ -223,6 +236,31 @@ int l2m_map(l2m_fs *fs, uint32_t ino, uint64_t lblk, uint64_t count, unsigned fl
 /* After the kernel wrote [off, off+len): convert unwritten extents in the
  * range to written and grow i_size to at least new_size. */
 int l2m_write_done(l2m_fs *fs, uint32_t ino, uint64_t off, uint64_t len, uint64_t new_size);
+
+/* Kernel-offloaded I/O as macOS does it (FSKit): the kernel maps ranges for
+ * writing within numbered operations, writes the data itself and reports
+ * each operation done once, with a single byte range that only summarises
+ * it. These calls remember which unwritten blocks were handed out to which
+ * operation and convert exactly those (see ops.c):
+ *   l2m_koio_map      like l2m_map; with L2M_MAP_ALLOCATE the unwritten
+ *                     extents returned are handed out to operation op
+ *   l2m_koio_unmap    take back what op got of [lblk, lblk+count) (the
+ *                     caller could not pass it on to the kernel)
+ *   l2m_koio_done     operation op finished; ok = 0 if it failed. Grows the
+ *                     file to off+len.
+ *   l2m_koio_release  the kernel is finished with the file (ino 0: with all
+ *                     files, before unmounting) */
+int l2m_koio_map(l2m_fs *fs, uint32_t ino, uint64_t op, uint64_t lblk, uint64_t count, unsigned flags, l2m_extent *out, int nmax);
+int l2m_koio_unmap(l2m_fs *fs, uint32_t ino, uint64_t op, uint64_t lblk, uint64_t count);
+int l2m_koio_done(l2m_fs *fs, uint32_t ino, uint64_t op, uint64_t off, uint64_t len, int ok);
+int l2m_koio_release(l2m_fs *fs, uint32_t ino);
+/* "Zero holes": unwritten extents inside the file size. They are legal
+ * (fallocate leaves them, and so does a copy that is still running), but
+ * in a finished file they read as zeros where data was meant to be. Calls
+ * fn (if not NULL) for each one, clipped to the size; a nonzero return
+ * stops. Returns the number of such blocks, or -errno. */
+typedef int (*l2m_zero_fn)(void *ctx, uint64_t lblk, uint64_t pblk, uint32_t len);
+int64_t l2m_zero_holes(l2m_fs *fs, uint32_t ino, l2m_zero_fn fn, void *ctx);
 
 /* ---- extended attributes ---------------------------------------------- */
 /* Names are in macOS form: "com.apple.FinderInfo" is stored as Linux

@@ -84,8 +84,15 @@ App screenshots (2880×1800, demo data): `screenshots/en`, `screenshots/de`.
 
 ## Notes for App Review
 
-ExtBridge is a file system module (FSKit) with a companion app. To try it, attach a USB stick or
-disk image formatted as ext4 (for example created on Linux with `mkfs.ext4`). Then open
-ExtBridge, follow the two-step setup to enable "ExtBridge ext4" in System Settings, and the disk
-appears in Finder. The tip jar (coffee button at the bottom of the sidebar and in About) offers
-three consumable tips; they unlock nothing.
+ExtBridge is a file system module (FSKit) with a companion app. It lets macOS read and write Linux ext4 disks.
+
+How to test:
+1. Open ExtBridge and follow the two-step setup: turn on "ExtBridge ext4" under System Settings → General → Login Items & Extensions → File System Extensions.
+2. Unzip the attached ExtBridge-Test.zip and double-click ExtBridge-Test.dmg. It contains a small ext4 disk that was formatted on Linux. It appears in Finder as "ExtBridge-Test" with a README, a photo and two text files.
+3. Open, copy, rename, delete or create files on it. The ExtBridge window shows the disk's details, diagnostics and a consistency check.
+
+The tip jar (coffee button at the bottom of the sidebar and in About) offers three consumable tips. They unlock nothing; the app works the same without them.
+
+Attachment for the reviewers: `ExtBridge-Test.zip` (this folder) – a 64 MB read-write DMG with a GPT
+disk and one ext4 partition (made with `mkfs.ext4 -d`, converted with `hdiutil convert -format UDRW`).
+Review screenshot of the tips: `--snapshot` of an App Store build renders the popover as `tips.png`.

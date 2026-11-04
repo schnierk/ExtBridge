@@ -27,7 +27,10 @@ shows up in Finder and you can read **and** write.
 * **Always eject before unplugging** (Finder: ⏏ next to the name, or in the app).
 * For every disk the **app** shows:
   * **Overview** – usage, health, journal, mode (read-only or read & write)
-  * **Diagnostics** – a file system check that changes nothing, and a speed test
+  * **Diagnostics** – a file system check that changes nothing, and a speed test. The check also
+    lists files with *zero holes*: a piece of the file reads as zeros where data belongs.
+    ExtBridge 0.9.2 could leave such pieces in very large files written on the Mac – copy or
+    download those files again.
   * **Information** – all technical details
   * **Settings** – *Always mount read-only*, *Do not mount automatically*
 * A small drive icon in the **menu bar** mounts and ejects quickly.

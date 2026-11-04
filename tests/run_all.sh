@@ -33,6 +33,26 @@ for mode in boundary prealloc map shuffle kernel; do
 		echo "  FAIL bigfile $mode: $out" | head -20; fail=1
 	fi
 done
+echo "== downloads through macOS kernel I/O (imperfect completion reports, zero holes)"
+for mode in download misreport lost stale merge; do
+	img="$L2M_TEST_DIR/koio-$mode.img"
+	rm -f "$img"
+	mkfs.ext4 -q -F "$img" 1G >/dev/null 2>&1
+	if out=$(L2M_KOIO_MB=${L2M_KOIO_MB:-160} build/koio "$img" $mode 2>&1) && e2fsck -fn "$img" >/dev/null 2>&1; then
+		echo "  ok   $out + e2fsck clean"
+	else
+		echo "  FAIL koio $mode: $out" | head -20; fail=1
+	fi
+done
+# lost reports made up for while the files are still open (lost after 0 ms)
+img="$L2M_TEST_DIR/koio-lost0.img"
+rm -f "$img"
+mkfs.ext4 -q -F "$img" 1G >/dev/null 2>&1
+if out=$(L2M_KOIO_LOST_MS=0 build/koio "$img" lost 7 2>&1) && e2fsck -fn "$img" >/dev/null 2>&1; then
+	echo "  ok   $out (lost reports swept early) + e2fsck clean"
+else
+	echo "  FAIL koio lost (swept early): $out" | head -20; fail=1
+fi
 echo
 [ $fail = 0 ] && echo "ALL TESTS PASSED" || echo "SOME TESTS FAILED"
 exit $fail

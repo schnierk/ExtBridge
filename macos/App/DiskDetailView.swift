@@ -348,9 +348,20 @@ private struct DiagnosticsTab: View {
                             Text("Prüft alle Prüfsummen, Belegungstabellen und Dateibäume – nur lesend, es wird nichts verändert.")
                                 .foregroundStyle(.secondary)
                             if let v, !v.running {
-                                Text(v.problems == 0 ? L("Keine Probleme gefunden.") : LF("%d Auffälligkeit(en) gefunden.", v.problems))
+                                let zeroHoles = !(v.zeroHoleFiles ?? []).isEmpty
+                                Text(v.problems > 0 ? LF("%d Auffälligkeit(en) gefunden.", v.problems)
+                                     : L(zeroHoles ? "Dateisystem in Ordnung." : "Keine Probleme gefunden."))
                                     .font(.headline)
                                     .foregroundStyle(v.problems == 0 ? Theme.ok : Theme.warn)
+                                if let z = v.zeroHoleFiles, !z.isEmpty {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(LF("%d Datei(en) mit Nulllöchern – bitte neu kopieren oder herunterladen.", z.count))
+                                            .font(.headline).foregroundStyle(Theme.warn)
+                                        Text("Darin liest sich ein Stück als Nullen, obwohl dort Daten hingehörten. ExtBridge 0.9.2 konnte das bei sehr großen Dateien verursachen.")
+                                            .foregroundStyle(.secondary)
+                                        ForEach(z.prefix(5), id: \.self) { Text($0).font(.system(.caption, design: .monospaced)) }
+                                    }
+                                }
                                 Button(L(showReport ? "Bericht ausblenden" : "Bericht anzeigen")) { withAnimation { showReport.toggle() } }
                             }
                             HStack {

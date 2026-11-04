@@ -28,7 +28,10 @@ Die Platte erscheint im Finder wie jede andere externe Festplatte – zum Lesen 
 * **Vor dem Abziehen immer auswerfen** (Finder: ⏏ neben dem Namen, oder in der App).
 * Die **App** zeigt für jede Platte:
   * **Übersicht** – Belegung, Zustand, Journal, Modus (nur lesen oder lesen & schreiben)
-  * **Diagnose** – Prüfung des Dateisystems (verändert nichts) und Geschwindigkeitstest
+  * **Diagnose** – Prüfung des Dateisystems (verändert nichts) und Geschwindigkeitstest. Die
+    Prüfung nennt auch Dateien mit *Nulllöchern*: Ein Stück der Datei liest sich als Nullen, wo
+    eigentlich Daten hingehören. ExtBridge 0.9.2 konnte das bei sehr großen Dateien verursachen,
+    die auf dem Mac geschrieben wurden – solche Dateien bitte neu kopieren oder herunterladen.
   * **Informationen** – alle technischen Daten
   * **Einstellungen** – *Immer nur lesend einhängen*, *Nicht automatisch einhängen*
 * In der **Menüleiste** gibt es ein kleines Laufwerk-Symbol zum schnellen Einhängen und Auswerfen.

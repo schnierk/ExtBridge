@@ -42,6 +42,12 @@
 5. File data is written before the metadata that references it is committed (ordered mode).
    Space handed to the kernel for writing is allocated as *unwritten* extents and only marked
    written in `completeIO` after the kernel wrote the data – no stale data can appear after a crash.
+   macOS reports each write operation with one summary range, which can span gaps and can miss
+   data, so the core remembers which unwritten blocks it handed to which operation
+   (`l2m_koio_map`) and converts exactly those when the operation reports (`l2m_koio_done`);
+   blocks never reported are converted after a minute inside the file, at the latest when the
+   kernel releases the file (`l2m_koio_release`, also at unmount). Read mappings show handed-out
+   blocks as data.
 6. Unlinked-but-open files and interrupted truncates are on the ext4 orphan list until finished.
 7. If the device reports a write error the volume switches to read-only immediately.
 

@@ -684,6 +684,7 @@ static void fs_free(l2m_fs *fs)
 	cache_destroy(fs);
 	free(fs->txn.freed);
 	free(fs->zero_block);
+	free(fs->koio);
 	pthread_mutex_destroy(&fs->lock);
 	free(fs);
 }
@@ -765,6 +766,8 @@ int l2m_mount(const l2m_dev *dev, unsigned flags, l2m_fs **out, char *err, size_
 		fs_free(fs);
 		return r;
 	}
+	const char *lost = getenv("L2M_KOIO_LOST_MS"); /* tests */
+	fs->koio_lost_ms = lost ? strtoull(lost, NULL, 10) : 60000;
 	fs->zero_block = calloc(1, fs->bs);
 	if (!fs->zero_block) {
 		fs_free(fs);
@@ -919,7 +922,11 @@ int l2m_umount(l2m_fs *fs)
 	if (!fs)
 		return 0;
 	pthread_mutex_lock(&fs->lock);
-	int r = fs_unmount_locked(fs);
+	/* whatever the kernel was handed for writing is on the disk by now */
+	int r = fs->rdonly ? 0 : koio_release_all_locked(fs);
+	if (r)
+		l2m_log(fs, L2M_LOG_ERROR, "unmount: could not mark written ranges (%d)", r);
+	r = fs_unmount_locked(fs);
 	pthread_mutex_unlock(&fs->lock);
 	fs_free(fs);
 	return r;

@@ -63,6 +63,8 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
     private let background = DispatchQueue(label: "extbridge.background", qos: .utility)
     private var verifying = false
     private var closed = false
+    /// optional I/O trace (see Trace.swift)
+    let trace = IOTrace()
 
     /// Why the volume is read-only when the core does not know it ("check":
     /// the check before the mount found problems).
@@ -286,6 +288,10 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
     }
 
     func unmount(replyHandler reply: @escaping () -> Void) {
+        trace.line("UNMOUNT")
+        trace.flush()
+        let k = l2m_koio_release(fs, 0)
+        if k != 0 { l2mLog.error("releasing written ranges at unmount failed: \(k)") }
         let r = l2m_sync(fs)
         if r != 0 { l2mLog.error("sync at unmount failed: \(r)") }
         timer?.cancel()
@@ -295,6 +301,7 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
     }
 
     func synchronize(flags: FSSyncFlags, replyHandler reply: @escaping (Error?) -> Void) {
+        trace.line("SYNC fl=\(flags.rawValue)")
         let r = l2m_sync(fs)
         reply(r == 0 ? nil : posix(r))
     }
@@ -321,6 +328,8 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
             _ = l2m_sync_if_older(self.fs, 5000)
             if ticks % 5 == 0 { self.publishStatus(mounted: true) }
             self.checkCommands()
+            self.trace.update(uuid: self.uuid)
+            self.trace.flush()
         }
         t.resume()
         timer = t
@@ -409,8 +418,9 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         L2MShared.writeJSON(ctx.result, to: url)
         DispatchQueue.global(qos: .utility).async { [self] in
             var report = [CChar](repeating: 0, count: 1 << 16)
+            var stats = l2m_verify_stats()
             let unmanaged = Unmanaged.passRetained(ctx)
-            let r = l2m_verify(fs, { c, done, total in
+            let r = l2m_verify_ex(fs, { c, done, total in
                 let ctx = Unmanaged<VerifyContext>.fromOpaque(c!).takeUnretainedValue()
                 ctx.result.fraction = total > 0 ? min(1, Double(done) / Double(total)) : 0
                 if Date().timeIntervalSince(ctx.lastWrite) > 0.25 {
@@ -419,16 +429,42 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
                 }
                 // the app cancels by deleting the result file
                 return FileManager.default.fileExists(atPath: ctx.url.path) ? 0 : 1
-            }, unmanaged.toOpaque(), &report, report.count)
+            }, unmanaged.toOpaque(), &report, report.count, &stats)
             unmanaged.release()
             ctx.result.running = false
             ctx.result.fraction = 1
             ctx.result.problems = Int(max(r, 0))
             ctx.result.report = String(cString: report)
+            if r >= 0 && stats.zero_hole_files > 0 {
+                let paths = zeroHolePaths(stats)
+                ctx.result.zeroHoleFiles = paths
+                ctx.result.report += "files with zero holes:\n" + paths.map { "  \($0)\n" }.joined()
+            }
             ctx.result.finished = Date()
             L2MShared.writeJSON(ctx.result, to: url)
             verifying = false
         }
+    }
+
+    private final class PathCollector {
+        var paths: [UInt32: [String]] = [:]
+    }
+
+    /// paths of the files the scan found zero holes in (inode numbers for
+    /// those not reachable from the root)
+    private func zeroHolePaths(_ stats: l2m_verify_stats) -> [String] {
+        let n = Int(min(stats.zero_hole_files, UInt64(MemoryLayout.size(ofValue: stats.zero_hole_inos) / 4)))
+        let inos = withUnsafeBytes(of: stats.zero_hole_inos) { Array($0.bindMemory(to: UInt32.self).prefix(n)) }
+        let col = PathCollector()
+        let unmanaged = Unmanaged.passRetained(col)
+        _ = l2m_find_paths(fs, inos, Int32(inos.count), { c, ino, path in
+            let col = Unmanaged<PathCollector>.fromOpaque(c!).takeUnretainedValue()
+            col.paths[ino, default: []].append(String(cString: path!))
+        }, unmanaged.toOpaque())
+        unmanaged.release()
+        var out = inos.flatMap { col.paths[$0] ?? ["inode \($0)"] }
+        if stats.zero_hole_files > UInt64(n) { out.append("… \(stats.zero_hole_files - UInt64(n)) more") }
+        return out
     }
 
     // MARK: lookup / attributes
@@ -489,6 +525,7 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         }
         if mask != 0 {
             let r = l2m_setattr(fs, i, mask, &st)
+            trace.line("SETATTR ino=\(i) mask=\(mask)\(req.isValid(.size) ? " size=\(req.size)" : "") r=\(r)")
             if r != 0 {
                 reply(nil, posix(r))
                 return
@@ -504,6 +541,11 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
 
     func reclaimItem(_ item: FSItem, replyHandler reply: @escaping (Error?) -> Void) {
         let i = ino(item)
+        trace.line("RECLAIM ino=\(i)")
+        // the kernel is done with the file: whatever it was handed for
+        // writing and never reported is on the disk by now
+        let k = l2m_koio_release(fs, i)
+        if k != 0 { l2mLog.error("releasing written ranges of inode \(i) failed: \(k)") }
         // frees the inode if it was unlinked (no-op if already freed)
         let r = l2m_release(fs, i)
         itemLock.lock()
@@ -516,6 +558,7 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
     var itemDeactivationPolicy: FSVolume.ItemDeactivationOptions { [.forRemovedItems] }
 
     func deactivateItem(_ item: FSItem, replyHandler reply: @escaping (Error?) -> Void) {
+        trace.line("DEACTIVATE ino=\(ino(item))")
         let r = l2m_release(fs, ino(item))
         reply(r == 0 ? nil : posix(r))
     }
@@ -575,6 +618,7 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         }
         if mask != 0 { _ = l2m_setattr(fs, newIno, mask, &st) }
         attrs.consumedAttributes = consumed
+        trace.line("CREATE ino=\(newIno) dir=\(dir) name=\(name.string ?? "?")\(mask & UInt32(L2M_SET_SIZE) != 0 ? " size=\(st.size)" : "")")
         return item(newIno, parent: dir)
     }
 
@@ -629,6 +673,7 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         let isDir = ((try? stat(ino(item)))?.mode ?? 0) & 0o170000 == 0o040000
         var orphan: Int32 = 0
         let r = l2m_unlink(fs, ino(directory), &n, n.count, isDir ? 1 : 0, &orphan)
+        trace.line("REMOVE ino=\(ino(item)) name=\(name.string ?? "?") r=\(r)")
         // an orphan is freed in reclaimItem() once nobody uses it anymore
         reply(r == 0 ? nil : posix(r))
     }
@@ -643,6 +688,7 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         var replaced: UInt32 = 0
         var orphan: Int32 = 0
         let r = l2m_rename(fs, ino(sourceDirectory), &s, s.count, ino(destinationDirectory), &d, d.count, 0, &replaced, &orphan)
+        trace.line("RENAME ino=\(ino(item)) \(sourceName.string ?? "?") -> \(destinationName.string ?? "?") r=\(r)")
         if r != 0 {
             reply(nil, posix(r))
             return
@@ -723,6 +769,7 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         let n: Int64 = buffer.withUnsafeMutableBytes { raw in
             l2m_read(fs, i, UInt64(offset), raw.baseAddress, min(length, raw.count))
         }
+        trace.line("READ ino=\(i) off=\(offset) len=\(length) r=\(n)")
         if n < 0 { reply(0, posix(n)) } else { reply(Int(n), nil) }
     }
 
@@ -731,6 +778,7 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         let n: Int64 = contents.withUnsafeBytes { raw in
             l2m_write(fs, i, UInt64(offset), raw.baseAddress, raw.count)
         }
+        trace.line("WRITE ino=\(i) off=\(offset) len=\(contents.count) r=\(n)")
         if n < 0 { reply(0, posix(n)) } else { reply(Int(n), nil) }
     }
 
@@ -798,14 +846,21 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
 
     // MARK: kernel offloaded I/O
 
-    private func pack(_ packer: FSExtentPacker, ino: UInt32, offset: off_t, length: Int, allocate: Bool, forWrite: Bool) -> Int32 {
+    /// Packs the extents of a byte range. For writing (op = the kernel's
+    /// operation) the core allocates what is missing and remembers which
+    /// unwritten blocks this operation got, so completeIO converts exactly
+    /// those, whatever range the kernel reports.
+    private func pack(_ packer: FSExtentPacker, ino: UInt32, offset: off_t, length: Int, write op: UInt64?,
+                      traced: inout String) -> Int32 {
         let bs = UInt64(blockSize)
         let first = UInt64(offset) / bs
         let last = (UInt64(offset) + UInt64(max(length, 1)) + bs - 1) / bs
+        let forWrite = op != nil
         var lblk = first
         var exts = [l2m_extent](repeating: l2m_extent(), count: 64)
         while lblk < last {
-            let n = l2m_map(fs, ino, lblk, last - lblk, allocate ? UInt32(L2M_MAP_ALLOCATE) : 0, &exts, Int32(exts.count))
+            let n = op.map { l2m_koio_map(fs, ino, $0, lblk, last - lblk, UInt32(L2M_MAP_ALLOCATE), &exts, Int32(exts.count)) }
+                ?? l2m_map(fs, ino, lblk, last - lblk, 0, &exts, Int32(exts.count))
             if n < 0 { return n }
             if n == 0 { break }
             for e in exts[0..<Int(n)] {
@@ -815,10 +870,21 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
                 case L2M_EXT_UNWRITTEN: type = forWrite ? .data : .zeroFill
                 default: type = .zeroFill
                 }
-                let phys = type == .zeroFill && e.pblk == 0 ? 0 : off_t(e.pblk * bs)
-                if !packer.packExtent(resource: device.resource, type: type, logicalOffset: off_t(e.lblk * bs),
-                                      physicalOffset: phys, length: Int(UInt64(e.len) * bs)) {
-                    return 0 // packer full: the kernel asks again for the rest
+                // zero-fill ranges carry no disk position: the kernel has to ask
+                // for a write mapping (and this core has to hand it out) before
+                // it can put data there
+                let phys = type == .zeroFill ? 0 : off_t(e.pblk * bs)
+                let packed = packer.packExtent(resource: device.resource, type: type, logicalOffset: off_t(e.lblk * bs),
+                                               physicalOffset: phys, length: Int(UInt64(e.len) * bs))
+                if trace.isOn {
+                    let kind = Int32(e.type) == L2M_EXT_DATA ? "D" : Int32(e.type) == L2M_EXT_UNWRITTEN ? "U" : "H"
+                    traced += " \(e.lblk)+\(e.len)@\(e.pblk)\(kind)\(packed ? "" : "!full")"
+                }
+                if !packed {
+                    // packer full: the kernel asks again for the rest, so this
+                    // operation did not get it yet
+                    if let op { _ = l2m_koio_unmap(fs, ino, op, e.lblk, last - e.lblk) }
+                    return 0
                 }
                 lblk = e.lblk + UInt64(e.len)
             }
@@ -832,7 +898,10 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
             reply(POSIXError(.EROFS))
             return
         }
-        let r = pack(packer, ino: ino(file), offset: offset, length: length, allocate: write, forWrite: write)
+        var traced = ""
+        let r = pack(packer, ino: ino(file), offset: offset, length: length, write: write ? Self.op(operationID) : nil,
+                     traced: &traced)
+        trace.line("MAP op=\(operationID.rawValue) ino=\(ino(file)) off=\(offset) len=\(length) fl=\(flags.rawValue) r=\(r):\(traced)")
         reply(r == 0 ? nil : posix(r))
     }
 
@@ -840,17 +909,45 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         // FSKit passes nil for "no error" although the header declares the
         // parameter nonnull. Bridging a nil Error crashes, so look at the
         // raw reference first.
-        let failed = !isNilError(status) && (status as NSError).code != 0
-        guard flags.contains(.write), !failed, length > 0 else {
+        let noStatus = isNilError(status)
+        let failed = !noStatus && (status as NSError).code != 0
+        if trace.isOn {
+            let st = noStatus ? "nil" : "\((status as NSError).domain):\((status as NSError).code)"
+            trace.line("DONE op=\(operationID.rawValue) ino=\(ino(file)) off=\(offset) len=\(length) fl=\(flags.rawValue) st=\(st)")
+        }
+        guard flags.contains(.write), length > 0 else {
             reply(nil)
             return
         }
-        // the data is on the disk: unwritten extents become real data now
-        // and the file grows to the end of the written range (Apple: update
-        // size and modification time here)
-        let end = UInt64(offset) + UInt64(length)
-        let r = l2m_write_done(fs, ino(file), UInt64(offset), UInt64(length), end)
+        // the data is on the disk: what this operation was handed becomes
+        // real data now and the file grows to the end of the reported range
+        // (Apple: update size and modification time here). A failed
+        // operation converts nothing; a later write may still cover it.
+        let r = l2m_koio_done(fs, ino(file), Self.op(operationID), UInt64(offset), UInt64(length), failed ? 0 : 1)
+        if trace.isOn {
+            trace.line("DONE-R op=\(operationID.rawValue) r=\(r) left=\(unwrittenBlocks(ino(file), offset: UInt64(offset), length: UInt64(length)))")
+        }
         reply(r == 0 ? nil : posix(r))
+    }
+
+    private static func op(_ id: FSOperationID) -> UInt64 { UInt64(UInt(bitPattern: id.rawValue)) }
+
+    /// number of blocks in the byte range that still read as zeros (trace only)
+    private func unwrittenBlocks(_ ino: UInt32, offset: UInt64, length: UInt64) -> UInt64 {
+        let bs = UInt64(blockSize)
+        var lblk = offset / bs
+        let last = (offset + length + bs - 1) / bs
+        var exts = [l2m_extent](repeating: l2m_extent(), count: 64)
+        var left: UInt64 = 0
+        while lblk < last {
+            let n = l2m_map(fs, ino, lblk, last - lblk, 0, &exts, Int32(exts.count))
+            if n <= 0 { break }
+            for e in exts[0..<Int(n)] {
+                if Int32(e.type) != L2M_EXT_DATA { left += UInt64(e.len) }
+                lblk = e.lblk + UInt64(e.len)
+            }
+        }
+        return left
     }
 
     func createFile(name: FSFileName, in directory: FSItem, attributes: FSItem.SetAttributesRequest, packer: FSExtentPacker, replyHandler reply: @escaping (FSItem?, FSFileName?, Error?) -> Void) {
@@ -865,7 +962,9 @@ final class Ext4Volume: FSVolume, FSVolume.Operations, FSVolume.PathConfOperatio
         lookupItem(named: name, inDirectory: directory) { [self] it, n, err in
             if let it = it as? Ext4Item, let st = try? stat(it.ino), st.mode & 0o170000 == 0o100000, st.size > 0 {
                 // hand the first extents to the kernel right away (saves a round trip)
-                _ = pack(packer, ino: it.ino, offset: 0, length: Int(min(st.size, 64 << 20)), allocate: false, forWrite: false)
+                var traced = ""
+                _ = pack(packer, ino: it.ino, offset: 0, length: Int(min(st.size, 64 << 20)), write: nil, traced: &traced)
+                trace.line("LOOKUP-MAP ino=\(it.ino) size=\(st.size):\(traced)")
             }
             reply(it, n, err)
         }

@@ -132,7 +132,7 @@ macos/       FSKit extension (Swift) and app (SwiftUI)
 
 ## Status and limits
 
-* Version 0.9.2 – public beta. Feature complete for everyday use and extensively tested on disk
+* Version 0.9.3 – public beta. Feature complete for everyday use and extensively tested on disk
   images and real disks; still keep backups of important data. See [CHANGELOG.md](CHANGELOG.md).
 * Not supported for writing: ext2/ext3 block-mapped files (read works), `inline_data`, `bigalloc`,
   `quota`, `casefold`, encryption, `ea_inode` (values larger than one block), fast-commit replay.

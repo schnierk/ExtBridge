@@ -322,7 +322,13 @@ static uint32_t popcount_bits(const uint8_t *bm, uint32_t nbits)
 
 int l2m_verify(l2m_fs *fs, l2m_progress_fn progress, void *ctx, char *report, size_t reportlen)
 {
+	return l2m_verify_ex(fs, progress, ctx, report, reportlen, NULL);
+}
+
+int l2m_verify_ex(l2m_fs *fs, l2m_progress_fn progress, void *ctx, char *report, size_t reportlen, l2m_verify_stats *stats)
+{
 	struct rep rp = {report, reportlen, 0, 0};
+	l2m_verify_stats zh = {0};
 	if (report && reportlen)
 		report[0] = 0;
 	pthread_mutex_lock(&fs->lock);
@@ -419,9 +425,16 @@ int l2m_verify(l2m_fs *fs, l2m_progress_fn progress, void *ctx, char *report, si
 				problem(&rp, "inode %u: %s", ino, r == -EFSBADCRC ? "checksum wrong" : "unreadable");
 				continue;
 			}
-			if (inode_is_reg(&in))
+			if (inode_is_reg(&in)) {
 				files++;
-			else if (inode_is_dir(&in))
+				int64_t z = zero_holes_locked(fs, &in, NULL, NULL);
+				if (z > 0) {
+					if (zh.zero_hole_files < sizeof(zh.zero_hole_inos) / sizeof(*zh.zero_hole_inos))
+						zh.zero_hole_inos[zh.zero_hole_files] = ino;
+					zh.zero_hole_files++;
+					zh.zero_hole_blocks += (uint64_t)z;
+				}
+			} else if (inode_is_dir(&in))
 				dirs++;
 			else if (inode_is_lnk(&in))
 				links++;
@@ -479,12 +492,24 @@ int l2m_verify(l2m_fs *fs, l2m_progress_fn progress, void *ctx, char *report, si
 	say(&rp, "checked %llu inodes: %llu files, %llu directories, %llu symlinks, %llu other\n",
 	    (unsigned long long)checked, (unsigned long long)files, (unsigned long long)dirs, (unsigned long long)links,
 	    (unsigned long long)other);
+	if (zh.zero_hole_files) {
+		say(&rp, "note: %llu file(s) with zero holes - %llu block(s) inside them are allocated but not marked as written and "
+			 "read as zeros. Legal for space reserved in advance, but in a finished file data is missing there "
+			 "(ExtBridge 0.9.2 could leave such holes in big files): copy those files again.\n",
+		    (unsigned long long)zh.zero_hole_files, (unsigned long long)zh.zero_hole_blocks);
+		for (uint64_t i = 0; i < zh.zero_hole_files && i < sizeof(zh.zero_hole_inos) / sizeof(*zh.zero_hole_inos); i++)
+			say(&rp, "  zero holes in inode %u\n", zh.zero_hole_inos[i]);
+	}
 	if (cancelled)
 		say(&rp, "scan cancelled\n");
-	else if (rp.problems == 0)
+	else if (rp.problems == 0 && !zh.zero_hole_files)
 		say(&rp, "RESULT: no problems found\n");
+	else if (rp.problems == 0)
+		say(&rp, "RESULT: no problems found, but %llu file(s) with zero holes\n", (unsigned long long)zh.zero_hole_files);
 	else
 		say(&rp, "RESULT: %d problem(s) found - repair with e2fsck on Linux\n", rp.problems);
+	if (stats)
+		*stats = zh;
 	if (progress && !cancelled)
 		progress(ctx, total + used_inodes_total, total + used_inodes_total);
 	fs->verify_csums = saved;

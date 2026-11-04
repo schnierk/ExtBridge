@@ -343,6 +343,20 @@ struct l2m_fs {
 	uint32_t errors_seen;
 	char unsupported[256];
 	uint64_t bytes_read, bytes_written;
+
+	/* kernel-offloaded I/O: unwritten blocks handed out for writing and not
+	 * converted yet (see ops.c) */
+	struct koio_range *koio;
+	size_t nkoio, capkoio;
+	uint64_t koio_lost_ms;   /* a report this late counts as lost */
+};
+
+struct koio_range {
+	uint64_t lblk, end; /* blocks [lblk, end) */
+	uint64_t op;        /* the kernel's operation ID */
+	uint64_t since_ms;  /* when it was handed out */
+	uint32_t ino;
+	bool failed;        /* the operation reported an error */
 };
 
 static inline bool fs_csum(const l2m_fs *fs) { return fs->has_csum; }
@@ -351,5 +365,8 @@ static inline uint16_t le16_at(const void *p) { uint16_t v; memcpy(&v, p, 2); re
 
 uint64_t l2m_now_ms(void);
 int fs_check_writable(l2m_fs *fs);
+/* kernel-offloaded I/O (ops.c) */
+int koio_release_all_locked(l2m_fs *fs);
+int64_t zero_holes_locked(l2m_fs *fs, struct l2m_inode *in, l2m_zero_fn fn, void *ctx);
 
 #endif

@@ -7,7 +7,9 @@
  * Finder copying many files): each thread owns a directory and creates,
  * writes, reads back and verifies, renames, truncates, links and deletes
  * files with random sizes; one extra thread keeps listing directories and
- * reading statistics. Every read is checked against the expected pattern.
+ * reading statistics. Half of the files are written the way macOS does it
+ * (kernel-offloaded I/O: l2m_koio_map, data straight onto the device,
+ * l2m_koio_done). Every read is checked against the expected pattern.
  * Afterwards the volume is unmounted; tests/run_all.sh runs e2fsck on it.
  *
  * SPDX-License-Identifier: MIT
@@ -19,6 +21,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +29,9 @@
 #include <unistd.h>
 
 static l2m_fs *fs;
+static int dev_fd;
+static uint32_t bs;
+static atomic_ullong opseq;
 static atomic_int stop;
 static atomic_long ops, errors;
 static int seconds = 20;
@@ -53,6 +59,34 @@ static unsigned rnd(struct worker *w)
 {
 	w->rnd = w->rnd * 1103515245u + 12345u;
 	return w->rnd >> 8;
+}
+
+/* the kernel's way: map (16 extents at a time), write whole blocks from its
+ * cache straight onto the device, report the operation done */
+static int64_t koio_write(struct worker *w, uint32_t ino, const uint8_t *buf, uint64_t off, uint64_t len)
+{
+	uint64_t op = atomic_fetch_add(&opseq, 1) + 1, first = off / bs, last = (off + len + bs - 1) / bs;
+	uint8_t blk[65536];
+	for (uint64_t lb = first; lb < last;) {
+		l2m_extent ex[16];
+		int n = l2m_koio_map(fs, ino, op, lb, last - lb, L2M_MAP_ALLOCATE, ex, 16);
+		if (n <= 0)
+			return n ? n : -EIO;
+		for (int i = 0; i < n; i++) {
+			for (uint32_t k = 0; k < ex[i].len; k++) {
+				uint64_t b = ex[i].lblk + k;
+				for (uint32_t j = 0; j < bs; j++)
+					blk[j] = b * bs + j < off + len ? buf[b * bs + j] : 0;
+				if (pwrite(dev_fd, blk, bs, (off_t)((ex[i].pblk + k) * bs)) != (ssize_t)bs)
+					return -errno;
+			}
+			lb = ex[i].lblk + ex[i].len;
+		}
+	}
+	int r = l2m_koio_done(fs, ino, op, first * bs, off + len - first * bs, 1);
+	if (!r && rnd(w) % 4 == 0)
+		r = l2m_koio_release(fs, ino);
+	return r ? r : (int64_t)len;
 }
 
 static void *work(void *arg)
@@ -83,9 +117,10 @@ static void *work(void *arg)
 		for (uint64_t i = 0; i < size; i++)
 			buf[i] = pattern(seed, i);
 		/* write in random chunks */
+		bool koio = rnd(w) % 2;
 		for (uint64_t off = 0; off < size;) {
 			uint64_t len = 1 + rnd(w) % (size - off < 300000 ? size - off : 300000);
-			int64_t wr = l2m_write(fs, ino, off, buf + off, len);
+			int64_t wr = koio ? koio_write(w, ino, buf, off, len) : l2m_write(fs, ino, off, buf + off, len);
 			if (wr == -ENOSPC || (wr >= 0 && wr < (int64_t)len)) {
 				/* volume full: clean up this file and keep going */
 				int orphan = 0;
@@ -207,6 +242,7 @@ int main(int argc, char **argv)
 		perror(argv[1]);
 		return 1;
 	}
+	dev_fd = fd;
 	l2m_dev dev;
 	l2m_dev_open_fd(fd, 1, &dev);
 	char err[256];
@@ -215,6 +251,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "mount: %s\n", err);
 		return 1;
 	}
+	l2m_info info;
+	l2m_get_info(fs, &info);
+	bs = info.block_size;
 	pthread_t th[64], wt;
 	struct worker w[64];
 	for (int i = 0; i < nthreads && i < 64; i++) {

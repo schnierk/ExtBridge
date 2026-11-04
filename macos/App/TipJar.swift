@@ -71,9 +71,11 @@ final class TipJar: ObservableObject {
     }
 }
 
-/// The coffee button's popover in App Store builds.
+/// The coffee button's popover in App Store builds. `demo` (name, price) shows fixed
+/// rows instead of the store's products, for screenshots (--snapshot).
 struct TipJarView: View {
     @ObservedObject var jar = TipJar.shared
+    var demo: [(name: String, price: String)] = []
     var done: () -> Void
     @State private var appear = false
 
@@ -86,46 +88,58 @@ struct TipJarView: View {
                 Text(L("Einen Kaffee spendieren")).font(.headline)
             }
             .padding(.bottom, 2)
-            switch jar.state {
-            case .loading:
-                HStack { ProgressView().controlSize(.small); Text(L("Lädt …")).foregroundStyle(.secondary) }
-                    .frame(maxWidth: .infinity, minHeight: 80)
-            case .thanks:
-                VStack(spacing: 8) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(Theme.gradient)
-                        .scaleEffect(appear ? 1 : 0.3)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.45), value: appear)
-                    Text(L("Vielen Dank! Das hält die Entwicklung am Laufen.")).multilineTextAlignment(.center)
-                    Button(L("Schließen")) { done(); jar.state = .ready }
+            if !demo.isEmpty {
+                ForEach(Array(demo.enumerated()), id: \.offset) { i, d in
+                    TipRow(cups: cups(i), name: d.name, price: d.price, busy: false) {}
                 }
-                .frame(maxWidth: .infinity)
-                .onAppear { appear = false; withAnimation { appear = true } }
-            case .failed(let message):
-                Text(message).foregroundStyle(.secondary)
-                Button(L("Erneut versuchen")) { Task { await jar.load() } }
-            case .ready, .buying:
-                ForEach(Array(jar.products.enumerated()), id: \.element.id) { i, p in
-                    TipRow(cups: cups(i), product: p, busy: jar.state == .buying(p.id)) {
-                        Task { await jar.buy(p) }
+                note
+            } else {
+                switch jar.state {
+                case .loading:
+                    HStack { ProgressView().controlSize(.small); Text(L("Lädt …")).foregroundStyle(.secondary) }
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                case .thanks:
+                    VStack(spacing: 8) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 34))
+                            .foregroundStyle(Theme.gradient)
+                            .scaleEffect(appear ? 1 : 0.3)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.45), value: appear)
+                        Text(L("Vielen Dank! Das hält die Entwicklung am Laufen.")).multilineTextAlignment(.center)
+                        Button(L("Schließen")) { done(); jar.state = .ready }
                     }
-                    .disabled(jar.state != .ready)
+                    .frame(maxWidth: .infinity)
+                    .onAppear { appear = false; withAnimation { appear = true } }
+                case .failed(let message):
+                    Text(message).foregroundStyle(.secondary)
+                    Button(L("Erneut versuchen")) { Task { await jar.load() } }
+                case .ready, .buying:
+                    ForEach(Array(jar.products.enumerated()), id: \.element.id) { i, p in
+                        TipRow(cups: cups(i), name: p.displayName, price: p.displayPrice, busy: jar.state == .buying(p.id)) {
+                            Task { await jar.buy(p) }
+                        }
+                        .disabled(jar.state != .ready)
+                    }
+                    note
                 }
-                Text(L("Bezahlt wird sicher über Apple. Es ist ein einmaliges Trinkgeld, kein Abo."))
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(.top, 2)
             }
         }
         .padding(16)
-        .frame(width: 300)
-        .task { await jar.load() }
+        .frame(width: 330)
+        .task { if demo.isEmpty { await jar.load() } }
+    }
+
+    private var note: some View {
+        Text(L("Bezahlt wird sicher über Apple. Es ist ein einmaliges Trinkgeld, kein Abo."))
+            .font(.caption).foregroundStyle(.secondary)
+            .padding(.top, 2)
     }
 }
 
 private struct TipRow: View {
     let cups: String
-    let product: Product
+    let name: String
+    let price: String
     let busy: Bool
     var action: () -> Void
     @State private var hover = false
@@ -133,10 +147,10 @@ private struct TipRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Text(cups).font(.system(size: 18)).frame(width: 64, alignment: .leading)
-                Text(product.displayName).fontWeight(.semibold)
+                Text(cups).font(.system(size: 16)).fixedSize().frame(width: 72, alignment: .leading)
+                Text(name).fontWeight(.semibold).lineLimit(1).fixedSize()
                 Spacer(minLength: 8)
-                if busy { ProgressView().controlSize(.small) } else { Text(product.displayPrice).monospacedDigit() }
+                if busy { ProgressView().controlSize(.small) } else { Text(price).monospacedDigit() }
             }
             .padding(10)
             .background(RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(hover ? 0.16 : 0.07)))

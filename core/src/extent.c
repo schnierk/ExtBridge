@@ -688,7 +688,18 @@ int ext_mark_written(l2m_fs *fs, struct l2m_inode *in, uint64_t lblk, uint64_t c
 			continue;
 		}
 		uint64_t x = L2M_MAX(a, lblk), y = L2M_MIN(b, end);
+		uint64_t pb = ext_pblk(e);
+		/* The written piece joins a written neighbour in the same leaf that
+		 * it touches on the disk too, as Linux does: a file written piece
+		 * by piece then keeps few extents instead of one per piece. */
+		struct ext4_extent *l = p > 0 ? ext_at(h, p - 1) : NULL;
+		struct ext4_extent *rn = p + 1 < h->eh_entries ? ext_at(h, p + 1) : NULL;
+		bool join_l = x == a && l && can_merge(l, a, pb, (uint32_t)(y - a), false);
+		bool join_r = y == b && rn && !ext_unwritten(rn) && rn->ee_block == b && ext_pblk(rn) == pb + L &&
+			      ext_len(rn) + (b - x) <= MAX_INIT_LEN;
 		int need = (x > a) + (y < b);
+		if ((x == a && y < b && join_l) || (y == b && x > a && join_r))
+			need = 0; /* the neighbour grows, extent p shrinks */
 		if (h->eh_entries + need > h->eh_max) {
 			/* Split so that extent p keeps its leaf mates or moves along:
 			 * a new leaf may never begin inside extent p (the pieces of p
@@ -700,23 +711,40 @@ int ext_mark_written(l2m_fs *fs, struct l2m_inode *in, uint64_t lblk, uint64_t c
 				return r;
 			continue; /* re-find */
 		}
-		uint64_t pb = ext_pblk(e);
 		int r = 0;
 		if (x == a && y == b) {
 			ext_set_len(e, (uint32_t)L, false);
-			/* merge with a written left neighbour if possible */
-			if (p > 0) {
-				struct ext4_extent *l = ext_at(h, p - 1);
-				if (can_merge(l, a, pb, (uint32_t)L, false)) {
-					ext_set_len(l, ext_len(l) + (uint32_t)L, false);
-					memmove(e, e + 1, (size_t)(h->eh_entries - p - 1) * sizeof(*e));
+			int cur = p;
+			if (join_l) {
+				ext_set_len(l, ext_len(l) + (uint32_t)L, false);
+				memmove(e, e + 1, (size_t)(h->eh_entries - p - 1) * sizeof(*e));
+				h->eh_entries--;
+				cur = p - 1;
+			}
+			if (cur + 1 < h->eh_entries) {
+				struct ext4_extent *c = ext_at(h, cur), *n = ext_at(h, cur + 1);
+				if (can_merge(c, n->ee_block, ext_pblk(n), ext_len(n), ext_unwritten(n))) {
+					ext_set_len(c, ext_len(c) + ext_len(n), false);
+					memmove(n, n + 1, (size_t)(h->eh_entries - cur - 2) * sizeof(*n));
 					h->eh_entries--;
 				}
 			}
 			r = node_dirty(fs, in, &path[depth]);
+		} else if (x == a && join_l) {
+			ext_set_len(l, ext_len(l) + (uint32_t)(y - a), false);
+			e->ee_block = (uint32_t)y;
+			ext_set_pblk(e, pb + (y - a));
+			ext_set_len(e, (uint32_t)(b - y), true);
+			r = node_dirty(fs, in, &path[depth]);
 		} else if (x == a) {
 			ext_set_len(e, (uint32_t)(y - a), false);
 			r = leaf_insert_at(fs, in, path, depth, p + 1, y, pb + (y - a), (uint32_t)(b - y), true);
+		} else if (y == b && join_r) {
+			ext_set_len(e, (uint32_t)(x - a), true);
+			rn->ee_block = (uint32_t)x;
+			ext_set_pblk(rn, pb + (x - a));
+			ext_set_len(rn, ext_len(rn) + (uint32_t)(b - x), false);
+			r = node_dirty(fs, in, &path[depth]);
 		} else if (y == b) {
 			ext_set_len(e, (uint32_t)(x - a), true);
 			r = leaf_insert_at(fs, in, path, depth, p + 1, x, pb + (x - a), (uint32_t)(b - x), false);

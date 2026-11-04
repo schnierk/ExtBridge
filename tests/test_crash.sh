@@ -4,9 +4,12 @@
 #  1. recovery by l2m itself (journal replay at mount) -> e2fsck clean
 #  2. recovery by Linux' e2fsck (replays our journal)  -> clean, same state
 #  3. the visible state equals the state after some prefix of operations
+#     (plus what ordered mode allows: data written in place by operations
+#     that were not committed yet, see crash_match.py)
 . "$(dirname "$0")/lib.sh"
 ROUNDS=${L2M_CRASH_ROUNDS:-60}
 echo "== crash tests ($ROUNDS power cuts per variant)"
+if m=$(python3 "$ROOT/tests/crash_match.py" --selftest); then ok "state check: $m"; else bad "state check: $m"; fi
 variants=("default|-t ext4|0" "default-sync|-t ext4|1" "1k|-t ext4 -b 1024|1" "nocsum|-t ext4 -O ^metadata_csum|1")
 for v in "${variants[@]}"; do
 	IFS='|' read -r name opts sync <<<"$v"
@@ -26,7 +29,8 @@ for v in "${variants[@]}"; do
 		k=$(( (RANDOM * 32768 + RANDOM) % total + 1 ))
 		img="$WORK/crash.img"
 		cp "$base" "$img"
-		L2M_CRASH_AFTER_WRITES=$k L2M_CRASH_SEED=$i "$L2M" $flags "$img" batch < "$WORK/cops.txt" >/dev/null 2>"$WORK/crash.err"
+		L2M_TRACE=1 L2M_CRASH_AFTER_WRITES=$k L2M_CRASH_SEED=$i "$L2M" $flags "$img" batch < "$WORK/cops.txt" >/dev/null 2>"$WORK/crash.err"
+		started=$(grep -c '^op: ' "$WORK/crash.err")
 		cp "$img" "$WORK/crash2.img"
 		# 1. our own recovery
 		if ! "$L2M" -w "$img" info > "$WORK/info.txt" 2>"$WORK/rec.err"; then
@@ -37,7 +41,7 @@ for v in "${variants[@]}"; do
 			bad "$name round $i (cut at write $k): not clean after l2m recovery"; echo "$out" | grep -v "^Durchgang\|^Pass\|^e2fsck" | head -8 | sed 's/^/        /'; fails=$((fails+1)); continue
 		fi
 		"$L2M" "$img" tree > "$WORK/crash_tree.txt" 2>/dev/null
-		if ! m=$(python3 "$ROOT/tests/crash_match.py" "$WORK/crash_tree.txt" "$WORK/snaps" "$WORK/cops.txt"); then
+		if ! m=$(python3 "$ROOT/tests/crash_match.py" "$WORK/crash_tree.txt" "$WORK/snaps" "$WORK/cops.txt" "$started"); then
 			bad "$name round $i (cut at write $k): $m"; fails=$((fails+1)); continue
 		fi
 		# 2. Linux' recovery (e2fsck replays the journal we wrote)
